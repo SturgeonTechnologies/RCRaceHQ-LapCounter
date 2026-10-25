@@ -15,12 +15,13 @@ Status: draft for review. Nothing here is built yet.
 
 | Part | Role |
 |---|---|
-| Raspberry Pi (3 B+ minimum, Pi 4/5 preferred) | Runs everything below |
+| Raspberry Pi 4 (kit baseline) | Runs everything below |
 | RTL-SDR Blog V3 | 5 MHz receiver (OpenStint, Q-branch direct sampling) |
 | Track loop | Split speaker wire across the track, 470 Ω termination, 1:9 balun, coax |
 | Learning pad | Cradle with a fixed coil under it (see [Learning pad](#learning-pad)) |
 | RF relay (SPDT, GPIO driven) | Selects track loop or pad into the one SDR |
 | Optional USB Wi-Fi dongle | Secondary internet uplink (`wlan1`) |
+| Speaker / PA via 3.5 mm jack, plus HDMI | Announcer output (same audio on both, see [Announcer](#announcer)) |
 
 ## Networking
 
@@ -50,6 +51,9 @@ Status: draft for review. Nothing here is built yet.
                                               ▲    │
                                               │    ▼
                                          learnd  syncd ──MQTT/TLS──► AWS IoT Core
+                                              │
+                                              ▼
+                                         announcerd ──► 3.5 mm jack + HDMI
 ```
 
 | Service | Responsibility |
@@ -59,6 +63,7 @@ Status: draft for review. Nothing here is built yet.
 | `web` | Flask under gunicorn: setup wizard, live view (Server-Sent Events), admin pages |
 | `syncd` | Pulls events/lineups, pushes the outbox, uploads/downloads `.rc4` files |
 | `learnd` | Drives the RF relay and the learning state machine (see below) |
+| `announcerd` | Start countdown, tones and spoken calls (see [Announcer](#announcer)). Read-only on SQLite; never blocks timing |
 
 All services share one SQLite file. Writers: `lapd`, `learnd`, `syncd`, `web`; WAL mode
 plus short transactions are enough at this write rate (a few passings per second).
@@ -167,8 +172,13 @@ RC Race HQ changes needed:
 
 ## Lap logic (`lapd`)
 
-- A heat is armed by the admin; the first passing per transponder after the start
-  is the start-line crossing (lap 0), unless the heat uses a timed start.
+- The admin presses **Start**. That begins a **15 s countdown** that can be cancelled
+  from the admin page until it reaches zero; cancelling returns the heat to *staged*.
+- At zero the heat goes *live* and `lapd` records the start time from the Pi clock at
+  that instant. Audio is cosmetic: the official start is never taken from when a
+  sound is played or heard, so speaker or HDMI delay can't skew timing.
+- The first passing per transponder after the start is the start-line crossing
+  (lap 0), unless the heat uses a timed start.
 - Ignore passings for the same transponder closer than `min_lap_ms` (default 4 s).
 - Unknown transponders during a heat are recorded and shown to the admin to assign.
 - Heat ends at `duration_s`; each car's next crossing finishes it (standard
@@ -218,6 +228,41 @@ across clubs.
 replacement needs an RC Race HQ admin action. Every upload records the thing that
 made it.
 
+## Announcer
+
+`announcerd` reacts to heat and learning events that `lapd`/`learnd` write to SQLite.
+It runs as its own service, so a stuck sound never delays a lap.
+
+**Output:** the Pi 4's built-in 3.5 mm jack and HDMI play the same audio at once.
+Each clip is opened on both ALSA devices (`plughw:CARD=Headphones` and
+`hdmi:CARD=vc4hdmi0`) together; the two outputs stay within a few tens of ms of each
+other, which is fine for calls. A USB sound card is a drop-in upgrade if the jack's
+hiss is a problem on a PA.
+
+**Sounds:**
+- **Countdown:** spoken "Heat starts in 15 seconds", "10", then 5-4-3-2-1 beeps and a
+  start horn at zero. Cancelling plays "Start cancelled" and stops the queue.
+- **Heat end / finish:** a horn when time is up, then "Finish" as each car crosses.
+- **Lap calls** (optional, per admin setting: off, every lap, best laps only, last
+  minute only): "Paul, lap 5, 14.2".
+- **Learning:** when `learnd` finishes, "Paul Smith, transponder 8954097, learned."
+  Failure plays "Moved, try again."
+
+**Racer names for learning:** looked up in this order:
+1. A racer in the checked-out event whose vehicle has that transponder number
+   (`heat_entry` / RC Race HQ `VehicleRow.transponderNumber`).
+2. A name the admin types on the Learn screen (optional field next to the number).
+3. Otherwise just the number: "Transponder 8954097, learned."
+
+**Engine:** WAV clips for beeps and horns (`aplay`, near instant). Speech uses Piper
+(neural TTS, faster than real time on a Pi 4) with `espeak-ng` as fallback; common
+phrases and each racer's name are rendered once and cached as WAV.
+
+**Queue:** start, cancel and finish sounds pre-empt everything. Lap calls are dropped
+if they are more than 3 s old, so the announcer never falls behind the race.
+
+**Settings:** volume, which outputs are enabled (jack / HDMI), lap-call mode, voice.
+
 ## Security notes
 
 - Hotspot is open by default (spectators); admin pages require local login and are
@@ -230,13 +275,13 @@ made it.
 1. `lapd` + SQLite + minimal live page against a running `openstint` (driveway test).
 2. Setup wizard, local admin, lineup builder (offline only).
 3. Learning flow with the pad and relay (local files only).
+   `announcerd` (countdown, start/finish, learn announcement) lands with steps 1 and 3.
 4. RC Race HQ side: pairing API, IoT thing/policy, `ingestLapCounter`, laps table.
 5. `syncd`: pairing, event import, outbox, S3 `.rc4` sync.
 6. Captive portal + network settings; Ansible role in OPS_ansible installs it all.
 
 ## Open questions
 
-- Pi 3 B+ vs Pi 4 as the kit baseline (CPU headroom for OpenStint + web + sync).
 - Timed start vs first-crossing start as the default.
 - Whether spectators on the hotspot should see the live view or be pointed at
   rcracehq.com once online.

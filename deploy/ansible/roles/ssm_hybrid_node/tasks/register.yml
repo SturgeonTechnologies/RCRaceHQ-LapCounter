@@ -1,0 +1,114 @@
+---
+# register.yml — one-use activation from the controller, ssm-setup-cli on the
+# device, then tag + clean up. The activation code never leaves no_log tasks.
+
+- name: Read the device's existing registration
+  ansible.builtin.slurp:
+    src: /var/lib/amazon/ssm/registration
+  register: ssm_hybrid_node_reg_file
+  failed_when: false
+
+- name: Note the local managed-node ID
+  ansible.builtin.set_fact:
+    ssm_hybrid_node_local_id: >-
+      {{ ((ssm_hybrid_node_reg_file.content | b64decode | from_json).ManagedInstanceID | default(''))
+         if ssm_hybrid_node_reg_file.content is defined else '' }}
+
+- name: Reconcile this MAC with SSM (controller)
+  ssm_hybrid_registration:
+    region: "{{ ssm_hybrid_node_region }}"
+    mac_address: "{{ ssm_hybrid_node_mac }}"
+    name: "{{ ssm_hybrid_node_name }}"
+    iam_role: "{{ ssm_hybrid_node_iam_role }}"
+    tags: "{{ ssm_hybrid_node_all_tags }}"
+    instance_id: "{{ ssm_hybrid_node_local_id or omit }}"
+    replace_stale: "{{ ssm_hybrid_node_replace_stale }}"
+  delegate_to: localhost
+  become: false
+  no_log: true # result carries the activation code
+  register: ssm_hybrid_node_reconcile
+
+- name: Show what reconcile decided
+  ansible.builtin.debug:
+    msg:
+      - "device:      {{ ssm_hybrid_node_name }} ({{ ssm_hybrid_node_mac }} on {{ ssm_hybrid_node_iface }})"
+      - "registered:  {{ ssm_hybrid_node_reconcile.instance_id | default('no', true) }}"
+      - "replaced:    {{ ssm_hybrid_node_reconcile.deregistered | default([]) | join(', ') or 'nothing' }}"
+
+- name: Register the device with its one-use activation
+  when:
+    - ssm_hybrid_node_reconcile.needs_registration | default(false)
+    - not ansible_check_mode
+  block:
+    - name: Make a private temp dir for ssm-setup-cli
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: ssm
+      register: ssm_hybrid_node_tmp
+
+    - name: Download ssm-setup-cli from the activation's Region
+      ansible.builtin.get_url:
+        url: "{{ ssm_hybrid_node_setup_cli_url }}"
+        dest: "{{ ssm_hybrid_node_tmp.path }}/ssm-setup-cli"
+        mode: "0700"
+
+    - name: Install the agent and register (answers "yes" to re-register)
+      ansible.builtin.command:
+        argv:
+          - "{{ ssm_hybrid_node_tmp.path }}/ssm-setup-cli"
+          - -register
+          - -activation-code
+          - "{{ ssm_hybrid_node_reconcile.activation_code }}"
+          - -activation-id
+          - "{{ ssm_hybrid_node_reconcile.activation_id }}"
+          - -region
+          - "{{ ssm_hybrid_node_region }}"
+        stdin: "yes"
+      changed_when: true
+      no_log: true
+
+    - name: Read the new registration
+      ansible.builtin.slurp:
+        src: /var/lib/amazon/ssm/registration
+      register: ssm_hybrid_node_new_reg
+
+    - name: Tag the new node and delete the used activation (controller)
+      ssm_hybrid_registration:
+        region: "{{ ssm_hybrid_node_region }}"
+        mac_address: "{{ ssm_hybrid_node_mac }}"
+        name: "{{ ssm_hybrid_node_name }}"
+        tags: "{{ ssm_hybrid_node_all_tags }}"
+        instance_id: "{{ (ssm_hybrid_node_new_reg.content | b64decode | from_json).ManagedInstanceID }}"
+        delete_activation_id: "{{ ssm_hybrid_node_reconcile.activation_id }}"
+        replace_stale: "{{ ssm_hybrid_node_replace_stale }}"
+      delegate_to: localhost
+      become: false
+      register: ssm_hybrid_node_final
+
+    - name: Registered
+      ansible.builtin.debug:
+        msg: "{{ ssm_hybrid_node_name }} is {{ ssm_hybrid_node_final.instance_id }}"
+
+  always:
+    - name: Remove ssm-setup-cli (AWS says not to keep it)
+      ansible.builtin.file:
+        path: "{{ ssm_hybrid_node_tmp.path }}"
+        state: absent
+      when: ssm_hybrid_node_tmp.path is defined
+
+- name: Configure the agent (shared creds for CloudWatch, key rotation)
+  ansible.builtin.template:
+    src: amazon-ssm-agent.json.j2
+    dest: /etc/amazon/ssm/amazon-ssm-agent.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart amazon-ssm-agent
+  when: not ansible_check_mode or ssm_hybrid_node_local_id | length > 0
+
+- name: Keep the agent running
+  ansible.builtin.systemd_service:
+    name: amazon-ssm-agent
+    enabled: true
+    state: started
+  when: not ansible_check_mode or ssm_hybrid_node_local_id | length > 0

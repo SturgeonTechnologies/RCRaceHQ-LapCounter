@@ -1,0 +1,20 @@
+---
+# handlers/main.yml — ssm_hybrid_node role
+
+- name: Restart amazon-ssm-agent
+  ansible.builtin.systemd_service:
+    name: amazon-ssm-agent
+    state: restarted
+
+- name: Reload CloudWatch agent config
+  ansible.builtin.command:
+    argv:
+      - /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+      - -a
+      - fetch-config
+      - -m
+      - onPremise
+      - -s
+      - -c
+      - file:/opt/aws/amazon-cloudwatch-agent/etc/racedecoder.json
+  changed_when: true

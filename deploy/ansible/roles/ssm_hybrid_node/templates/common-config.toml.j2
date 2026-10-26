@@ -1,0 +1,7 @@
+# Managed by Ansible (role ssm_hybrid_node).
+# The SSM agent (ShareCreds=true) writes the hybrid role's short-lived
+# credentials to root's default profile and refreshes them; the CloudWatch
+# agent reads them from there.
+[credentials]
+  shared_credential_profile = "default"
+  shared_credential_file = "/root/.aws/credentials"

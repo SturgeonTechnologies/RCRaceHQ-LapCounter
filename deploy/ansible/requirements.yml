@@ -1,0 +1,6 @@
+---
+# ansible-galaxy collection install -r requirements.yml
+collections:
+  # ufw module — only the opt-in firewall step in openstint_decoder uses it.
+  - name: community.general
+    version: ">=8.0.0"

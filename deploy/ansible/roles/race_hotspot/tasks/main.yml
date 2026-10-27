@@ -10,9 +10,11 @@
       - race_hotspot_interface not in race_hotspot_uplinks
       - race_hotspot_passphrase | length == 0 or (race_hotspot_passphrase | length) is within_range(8, 63)
       - race_hotspot_country | length == 2
+      - race_hotspot_web_eth0_interface != race_hotspot_interface
     fail_msg: >-
       Need at least one uplink that isn't the hotspot interface, a passphrase
-      that is empty (open) or 8-63 characters, and a 2-letter Wi-Fi country.
+      that is empty (open) or 8-63 characters, a 2-letter Wi-Fi country, and a
+      wired interface for race_hotspot_web_on_eth0 that isn't the hotspot.
 
 - name: Refuse to run if we're managing the Pi over the hotspot interface
   ansible.builtin.assert:
@@ -137,6 +139,36 @@
     - race-portal-firewall.service
     - race-portal.service
 
+# ── Wired side: mDNS name for the event page (race_hotspot_web_on_eth0) ─────────
+
+- name: Install avahi (http://<hostname>.local/ on the wired side)
+  ansible.builtin.apt:
+    name: avahi-daemon
+    state: present
+  when: race_hotspot_web_on_eth0 | bool
+
+- name: Publish the event page over mDNS
+  ansible.builtin.template:
+    src: race-web.avahi.service.j2
+    dest: /etc/avahi/services/race-web.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: race_hotspot_web_on_eth0 | bool
+
+- name: Stop publishing the event page over mDNS
+  ansible.builtin.file:
+    path: /etc/avahi/services/race-web.service
+    state: absent
+  when: not race_hotspot_web_on_eth0 | bool
+
+- name: Enable avahi
+  ansible.builtin.systemd_service:
+    name: avahi-daemon.service
+    enabled: true
+    state: started
+  when: race_hotspot_web_on_eth0 | bool
+
 # ── ufw (only when the decoder role turned it on) ───────────────────────
 
 - name: Allow DNS/portal (TCP) on the hotspot through ufw
@@ -168,6 +200,27 @@
   loop: "{{ race_hotspot_uplinks }}"
   when: race_hotspot_manage_ufw | bool
 
+- name: Allow the event page on the wired side through ufw
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ race_hotspot_web_eth0_interface }}"
+    from_ip: "{{ race_hotspot_web_eth0_allowed_cidr }}"
+    port: "{{ race_hotspot_portal_port | string }}"
+    proto: tcp
+    delete: "{{ not race_hotspot_web_on_eth0 | bool }}"
+  when: race_hotspot_manage_ufw | bool
+
+- name: Allow mDNS on the wired side through ufw
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ race_hotspot_web_eth0_interface }}"
+    port: "5353"
+    proto: udp
+    delete: "{{ not race_hotspot_web_on_eth0 | bool }}"
+  when: race_hotspot_manage_ufw | bool
+
 # ── Check ───────────────────────────────────────────────────────────────
 
 - name: Read hotspot state
@@ -181,6 +234,9 @@
     msg:
       - "SSID:    {{ race_hotspot_ssid }} ({{ 'WPA2' if race_hotspot_passphrase else 'open' }}), {{ race_hotspot_state.stdout | default('state unknown') }}"
       - "Portal:  http://{{ race_hotspot_hostname }}/  ({{ race_hotspot_address }})"
+      - >-
+        Wired:   {{ ('http://' ~ ansible_facts['hostname'] ~ '.local/ on ' ~ race_hotspot_web_eth0_interface)
+        if race_hotspot_web_on_eth0 | bool else 'off (race_hotspot_web_on_eth0: false)' }}
       - "Uplinks: {{ race_hotspot_uplinks | join(', ') }}  (let through for {{ race_hotspot_access_timeout }})"
       - "Allowed: sudo nft list set inet race_portal allowed"
       - "Logs:    journalctl -u race-portal -f"

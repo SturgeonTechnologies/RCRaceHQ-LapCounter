@@ -11,6 +11,11 @@ DNAT'd here by the race_portal nftables table. This server:
     to the nftables `allowed` set (with a timeout) and serves the landing page.
     From then on the client's traffic is forwarded and NATed out the uplink.
 
+With race_hotspot_web_on_eth0 it also listens on the wired side. Clients that aren't
+on the hotspot subnet (a laptop at the timing table, a TV in the pits) just get
+the page: no redirect, since `race` doesn't resolve off the hotspot, and no
+nft grant, since they aren't routed through the Pi.
+
 Stdlib only. Runs unprivileged with CAP_NET_ADMIN (for `nft`) and
 CAP_NET_BIND_SERVICE (port 80); see race-portal.service.
 
@@ -111,11 +116,16 @@ def grant_access(cfg: Config, client: str, run=subprocess.run) -> bool:
     return True
 
 
-def landing_page(cfg: Config, online: bool) -> bytes:
+STATUS_TEXT = {
+    "online": "You're connected. Internet access is on for this device.",
+    "offline": "You're on the event network, but internet access couldn't be turned on.",
+    "wired": "You're on the track network.",
+}
+
+
+def landing_page(cfg: Config, status: str) -> bytes:
     title = html.escape(cfg.title)
-    status = ("You're connected. Internet access is on for this device."
-              if online else
-              "You're on the event network, but internet access couldn't be turned on.")
+    text = STATUS_TEXT[status]
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -123,14 +133,24 @@ def landing_page(cfg: Config, online: bool) -> bytes:
 <style>body{{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}}</style>
 </head><body>
 <h1>{title}</h1>
-<p>{html.escape(status, quote=False)}</p>
+<p>{html.escape(text, quote=False)}</p>
 <p>Live timing for this event will show here at <strong>{html.escape(cfg.portal_url)}</strong>.</p>
 </body></html>
 """.encode()
 
 
-def decide(cfg: Config, host_header: str | None) -> str:
-    """'portal' for the event hostname, 'redirect' for anything else."""
+def on_hotspot(cfg: Config, client: str) -> bool:
+    try:
+        return ipaddress.IPv4Address(client) in cfg.network
+    except ValueError:
+        return False
+
+
+def decide(cfg: Config, host_header: str | None, client: str | None = None) -> str:
+    """'wired' for clients off the hotspot subnet; on the hotspot, 'portal' for
+    the event hostname and 'redirect' for anything else."""
+    if client is not None and not on_hotspot(cfg, client):
+        return "wired"
     return "portal" if request_host(host_header) in cfg.hostnames else "redirect"
 
 
@@ -150,18 +170,24 @@ def make_handler(cfg: Config):
                 self.wfile.write(body)
 
         def _handle(self):
-            if decide(cfg, self.headers.get("Host")) == "redirect":
+            client = self.client_address[0]
+            action = decide(cfg, self.headers.get("Host"), client)
+            if action == "redirect":
                 self._send(302, headers={"Location": cfg.portal_url})
                 return
-            online = grant_access(cfg, self.client_address[0])
-            self._send(200, landing_page(cfg, online),
+            if action == "wired":
+                status = "wired"
+            else:
+                status = "online" if grant_access(cfg, client) else "offline"
+            self._send(200, landing_page(cfg, status),
                        {"Content-Type": "text/html; charset=utf-8"})
 
         do_GET = _handle
         do_HEAD = _handle
 
         def do_POST(self):  # form posts from probes / old pages: just bounce
-            self._send(303, headers={"Location": cfg.portal_url})
+            target = "/" if decide(cfg, None, self.client_address[0]) == "wired" else cfg.portal_url
+            self._send(303, headers={"Location": target})
 
         def log_message(self, fmt, *args):
             LOG.debug("%s %s", self.client_address[0], fmt % args)

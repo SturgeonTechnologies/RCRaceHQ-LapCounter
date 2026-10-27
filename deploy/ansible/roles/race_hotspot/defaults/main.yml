@@ -46,6 +46,18 @@ race_hotspot_input_udp_ports: [53, 67]
 race_hotspot_portal_title: "RC Race Event"
 race_hotspot_portal_port: 80
 
+# ── Wired side (eth0) ───────────────────────────────────────────────────
+# Also serve the event page on the wired network, e.g. a laptop at the timing
+# table or a TV in the pits. The page listens on every interface instead of
+# only the hotspot address, and is published over mDNS as
+# http://<pi hostname>.local/ (a bare `race` only resolves on the hotspot).
+# Wired clients just get the page: no redirect, no internet grant.
+race_hotspot_web_on_eth0: false
+race_hotspot_web_eth0_interface: "eth0"
+# Who on the wired side may open it, when ufw is in use. "any" because a
+# track's LAN isn't known at provisioning time; set a CIDR to narrow it.
+race_hotspot_web_eth0_allowed_cidr: "any"
+
 # ── ufw ────────────────────────────────────────────────────────────────
 # ufw's default deny (incoming and routed) would block DHCP/DNS/portal and
 # forwarding. When ufw is in use, the role adds the matching allow rules.

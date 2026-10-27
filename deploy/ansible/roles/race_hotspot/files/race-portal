@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""race-portal: captive portal for the lap counter hotspot.
+
+Hotspot clients that haven't been let through have every plain-HTTP request
+DNAT'd here by the race_portal nftables table. This server:
+
+  * answers any host other than the event hostname with a 302 to
+    http://race/ (that is what makes phones pop the "sign in to network" sheet
+    from their connectivity probes), and
+  * on a request for the event hostname itself, adds the client's IPv4 address
+    to the nftables `allowed` set (with a timeout) and serves the landing page.
+    From then on the client's traffic is forwarded and NATed out the uplink.
+
+Stdlib only. Runs unprivileged with CAP_NET_ADMIN (for `nft`) and
+CAP_NET_BIND_SERVICE (port 80); see race-portal.service.
+
+The lap counter web app will take over the landing page later; it only has to
+call `nft add element inet <table> <set> { <ip> timeout <t> }` the same way
+(grant_access below) on a client's first visit.
+"""
+
+from __future__ import annotations
+
+import html
+import ipaddress
+import logging
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+LOG = logging.getLogger("race-portal")
+
+
+@dataclass(frozen=True)
+class Config:
+    listen_addr: str
+    listen_port: int
+    gateway: ipaddress.IPv4Address
+    network: ipaddress.IPv4Network
+    hostname: str
+    hostnames: frozenset[str]
+    nft_table: str
+    nft_set: str
+    timeout: str
+    title: str
+
+    @classmethod
+    def from_env(cls, env: dict[str, str]) -> "Config":
+        gateway = ipaddress.IPv4Address(env.get("PORTAL_GATEWAY", "10.77.0.1"))
+        prefix = int(env.get("PORTAL_PREFIX", "24"))
+        hostname = env.get("PORTAL_HOSTNAME", "race").lower()
+        domain = env.get("PORTAL_DOMAIN", "lan").lower()
+        return cls(
+            listen_addr=env.get("PORTAL_LISTEN", str(gateway)),
+            listen_port=int(env.get("PORTAL_PORT", "80")),
+            gateway=gateway,
+            network=ipaddress.IPv4Network(f"{gateway}/{prefix}", strict=False),
+            hostname=hostname,
+            hostnames=frozenset({hostname, f"{hostname}.{domain}", str(gateway)}),
+            nft_table=env.get("PORTAL_NFT_TABLE", "race_portal"),
+            nft_set=env.get("PORTAL_NFT_SET", "allowed"),
+            timeout=env.get("PORTAL_TIMEOUT", "12h"),
+            title=env.get("PORTAL_TITLE", "RC Race Event"),
+        )
+
+    @property
+    def portal_url(self) -> str:
+        return f"http://{self.hostname}/"
+
+
+def request_host(header: str | None) -> str:
+    """Host header -> bare lowercase hostname (port and trailing dot removed)."""
+    if not header:
+        return ""
+    host = header.strip().lower()
+    if host.startswith("["):  # IPv6 literal; never ours
+        return host
+    return host.rsplit(":", 1)[0].rstrip(".")
+
+
+def client_to_allow(cfg: Config, client: str) -> ipaddress.IPv4Address | None:
+    """The client's address if it is a hotspot client we may let through."""
+    try:
+        addr = ipaddress.IPv4Address(client)
+    except ValueError:
+        return None
+    if addr not in cfg.network or addr in (cfg.gateway, cfg.network.network_address,
+                                           cfg.network.broadcast_address):
+        return None
+    return addr
+
+
+def nft_add_command(cfg: Config, addr: ipaddress.IPv4Address) -> list[str]:
+    # addr is a validated IPv4Address and timeout comes from our own unit
+    # file, so nothing user-controlled reaches nft's parser.
+    return ["nft", "add", "element", "inet", cfg.nft_table, cfg.nft_set,
+            f"{{ {addr} timeout {cfg.timeout} }}"]
+
+
+def grant_access(cfg: Config, client: str, run=subprocess.run) -> bool:
+    addr = client_to_allow(cfg, client)
+    if addr is None:
+        return False
+    result = run(nft_add_command(cfg, addr), capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        LOG.error("nft add %s failed: %s", addr, (result.stderr or "").strip())
+        return False
+    LOG.info("allowed %s for %s", addr, cfg.timeout)
+    return True
+
+
+def landing_page(cfg: Config, online: bool) -> bytes:
+    title = html.escape(cfg.title)
+    status = ("You're connected. Internet access is on for this device."
+              if online else
+              "You're on the event network, but internet access couldn't be turned on.")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}}</style>
+</head><body>
+<h1>{title}</h1>
+<p>{html.escape(status, quote=False)}</p>
+<p>Live timing for this event will show here at <strong>{html.escape(cfg.portal_url)}</strong>.</p>
+</body></html>
+""".encode()
+
+
+def decide(cfg: Config, host_header: str | None) -> str:
+    """'portal' for the event hostname, 'redirect' for anything else."""
+    return "portal" if request_host(host_header) in cfg.hostnames else "redirect"
+
+
+def make_handler(cfg: Config):
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "race-portal"
+        sys_version = ""
+
+        def _send(self, status: int, body: bytes = b"", headers: dict[str, str] | None = None):
+            self.send_response(status)
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+
+        def _handle(self):
+            if decide(cfg, self.headers.get("Host")) == "redirect":
+                self._send(302, headers={"Location": cfg.portal_url})
+                return
+            online = grant_access(cfg, self.client_address[0])
+            self._send(200, landing_page(cfg, online),
+                       {"Content-Type": "text/html; charset=utf-8"})
+
+        do_GET = _handle
+        do_HEAD = _handle
+
+        def do_POST(self):  # form posts from probes / old pages: just bounce
+            self._send(303, headers={"Location": cfg.portal_url})
+
+        def log_message(self, fmt, *args):
+            LOG.debug("%s %s", self.client_address[0], fmt % args)
+
+    return Handler
+
+
+def main() -> int:
+    logging.basicConfig(level=os.environ.get("PORTAL_LOG_LEVEL", "INFO"),
+                        format="%(levelname)s %(message)s", stream=sys.stdout)
+    cfg = Config.from_env(dict(os.environ))
+    server = ThreadingHTTPServer((cfg.listen_addr, cfg.listen_port), make_handler(cfg))
+    LOG.info("listening on %s:%d, portal %s", cfg.listen_addr, cfg.listen_port, cfg.portal_url)
+    server.serve_forever()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -24,6 +24,12 @@ On the target Pi (`become: true`):
 - Enables + starts `openstint.service`; optionally locks the ZeroMQ port to one
   CIDR with `ufw`.
 - Prints whether the service is active and whether an RTL-SDR is on USB.
+- Unless `race_hotspot_enabled: false`: turns the built-in Wi-Fi into the open
+  `RC Race Event` access point. New devices are sent to `http://race/`; once
+  they've opened it they get internet through `eth0` (NAT). DHCP/DNS is the
+  separate `race_dns` role. **Provision over Ethernet**: the role refuses to
+  run if your SSH session is on `wlan0`. Details:
+  [`race_hotspot`](../roles/race_hotspot/README.md).
 
 ## Prerequisites
 
@@ -88,9 +94,11 @@ learned transponders.
 ## Tests
 
 ```bash
-python3 -m pytest roles/openstint_decoder/tests -q   # needs pytest; pyzmq for the end-to-end test
+python3 -m pytest roles -q   # needs pytest; pyzmq for openstint-learn's end-to-end test
 ```
 
 ## Roles used
 
 - [`openstint_decoder`](../roles/openstint_decoder/README.md)
+- [`race_hotspot`](../roles/race_hotspot/README.md) (optional event Wi-Fi + captive portal)
+- [`race_dns`](../roles/race_dns/README.md) (DHCP + DNS for the hotspot, `http://race`)

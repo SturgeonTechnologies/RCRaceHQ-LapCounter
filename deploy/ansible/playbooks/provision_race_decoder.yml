@@ -11,3 +11,7 @@
   gather_facts: true # needs architecture / distribution for the asserts
   roles:
     - openstint_decoder
+    # Event Wi-Fi + captive portal to http://race, then internet via eth0.
+    # Pulls in race_dns. Set race_hotspot_enabled: false to skip.
+    - role: race_hotspot
+      when: race_hotspot_enabled | default(true) | bool

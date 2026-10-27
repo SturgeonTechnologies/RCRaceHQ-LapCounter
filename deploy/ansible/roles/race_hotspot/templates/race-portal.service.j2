@@ -7,7 +7,7 @@ Requires=race-portal-firewall.service
 [Service]
 Environment=PORTAL_GATEWAY={{ race_hotspot_address }}
 Environment=PORTAL_PREFIX={{ race_hotspot_prefix }}
-Environment=PORTAL_LISTEN={{ race_hotspot_address }}
+Environment=PORTAL_LISTEN={{ '0.0.0.0' if race_hotspot_web_on_eth0 | bool else race_hotspot_address }}
 Environment=PORTAL_PORT={{ race_hotspot_portal_port }}
 Environment=PORTAL_HOSTNAME={{ race_hotspot_hostname }}
 Environment=PORTAL_DOMAIN={{ race_hotspot_domain }}

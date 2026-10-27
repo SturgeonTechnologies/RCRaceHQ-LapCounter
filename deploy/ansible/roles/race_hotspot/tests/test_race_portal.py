@@ -64,6 +64,13 @@ def test_request_host(header, expected):
 ])
 def test_decide(header, expected):
     assert portal.decide(CFG, header) == expected
+    assert portal.decide(CFG, header, "10.77.0.50") == expected
+
+
+@pytest.mark.parametrize("client", ["192.168.0.20", "127.0.0.1", "::1", "garbage"])
+def test_decide_off_hotspot_is_wired_whatever_the_host(client):
+    for header in ("race", "racedecoder.local", "192.168.0.40", None):
+        assert portal.decide(CFG, header, client) == "wired"
 
 
 # ── who may be let through ───────────────────────────────────────────────
@@ -113,18 +120,43 @@ def test_grant_reports_nft_failure():
 
 def test_landing_page_escapes_title():
     cfg = portal.Config.from_env({"PORTAL_TITLE": "<b>Club</b>"})
-    body = portal.landing_page(cfg, online=True).decode()
+    body = portal.landing_page(cfg, "online").decode()
     assert "&lt;b&gt;Club&lt;/b&gt;" in body and "<b>Club" not in body
+
+
+@pytest.mark.parametrize("status,text", [
+    ("online", "Internet access is on"), ("offline", "couldn't be turned on"),
+    ("wired", "on the track network"),
+])
+def test_landing_page_status(status, text):
+    assert text in portal.landing_page(CFG, status).decode()
 
 
 # ── HTTP behaviour end to end (loopback, nft stubbed out) ────────────────
 
-@pytest.fixture()
-def server(monkeypatch):
+# The test client is always 127.0.0.1. HOTSPOT_CFG puts that on the hotspot
+# subnet; the default CFG makes it a wired (eth0-side) client.
+HOTSPOT_CFG = portal.Config.from_env({"PORTAL_GATEWAY": "127.0.0.1", "PORTAL_PREFIX": "8"})
+
+
+def _serve(monkeypatch, cfg):
     granted = []
     monkeypatch.setattr(portal, "grant_access", lambda cfg, client: granted.append(client) or True)
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), portal.make_handler(CFG))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), portal.make_handler(cfg))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, granted
+
+
+@pytest.fixture()
+def server(monkeypatch):
+    srv, granted = _serve(monkeypatch, HOTSPOT_CFG)
+    yield srv.server_address[1], granted
+    srv.shutdown()
+
+
+@pytest.fixture()
+def wired_server(monkeypatch):
+    srv, granted = _serve(monkeypatch, CFG)
     yield srv.server_address[1], granted
     srv.shutdown()
 
@@ -134,10 +166,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def _get(port, host, method="GET"):
+def _get(port, host, method="GET", data=None):
     opener = urllib.request.build_opener(_NoRedirect)
     req = urllib.request.Request(f"http://127.0.0.1:{port}/hotspot-detect.html",
-                                 headers={"Host": host}, method=method)
+                                 headers={"Host": host}, method=method, data=data)
     try:
         resp = opener.open(req, timeout=5)
     except urllib.error.HTTPError as err:
@@ -165,3 +197,17 @@ def test_head_has_no_body(server):
     port, _ = server
     status, _, body = _get(port, "race", method="HEAD")
     assert status == 200 and body == b""
+
+
+def test_wired_client_gets_page_without_redirect_or_grant(wired_server):
+    port, granted = wired_server
+    for host in ("racedecoder.local", "192.168.0.40", "captive.apple.com"):
+        status, _, body = _get(port, host)
+        assert status == 200 and b"on the track network" in body
+    assert granted == []
+
+
+def test_wired_post_bounces_to_root_not_race(wired_server):
+    port, _ = wired_server
+    status, headers, _ = _get(port, "racedecoder.local", method="POST", data=b"x=1")
+    assert status == 303 and headers["Location"] == "/"

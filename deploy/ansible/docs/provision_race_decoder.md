@@ -28,8 +28,9 @@ On the target Pi (`become: true`):
   `RC Race Event` access point. New devices are sent to `http://race/`; once
   they've opened it they get internet through `eth0` (NAT). DHCP/DNS is the
   separate `race_dns` role. **Provision over Ethernet**: the role refuses to
-  run if your SSH session is on `wlan0`. Details:
-  [`race_hotspot`](../roles/race_hotspot/README.md).
+  run if your SSH session is on `wlan0`. With `race_hotspot_web_on_eth0: true` the
+  same page is also served on the wired side at `http://<hostname>.local/`.
+  Details: [`race_hotspot`](../roles/race_hotspot/README.md).
 
 ## Prerequisites
 

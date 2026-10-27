@@ -11,15 +11,17 @@ all:
         # Ethernet MAC (`ip -br link` on the Pi). Unlisted Pis still register
         # as racedecoder-<mac> unless ssm_hybrid_node_require_known_mac is true.
         ssm_hybrid_node_devices: {}
+        #   "dc:a6:32:01:02:03":
+        #     name: rcclub-track1
+        #     tags: { Club: rcclub }
         # Event hotspot (roles race_hotspot + race_dns). Open SSID by default;
         # set race_hotspot_passphrase (vault it) for WPA2. Add wlan1 to the
         # uplinks when the USB Wi-Fi uplink is used.
         race_hotspot_enabled: true
         # race_hotspot_ssid: "RC Race Event"
         # race_hotspot_uplinks: [eth0]
-        #   "dc:a6:32:01:02:03":
-        #     name: rcclub-track1
-        #     tags: { Club: rcclub }
+        # Also serve the event page on eth0 at http://<hostname>.local/
+        race_hotspot_web_on_eth0: false
       hosts:
         racedecoder:
           ansible_host: racedecoder.local

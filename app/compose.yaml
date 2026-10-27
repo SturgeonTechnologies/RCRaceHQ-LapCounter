@@ -1,0 +1,29 @@
+# Runs next to openstint.service on the Pi. Host networking so lapd reaches the
+# decoder on 127.0.0.1:5556 and the web port is reachable on the hotspot and
+# (with race_hotspot_web_on_eth0) the wired side. The lapcounter_app role will
+# template this file with a pinned image tag; this copy is for local runs.
+services:
+  web:
+    image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      LAPCOUNTER_DB: /var/lib/lapcounter/lapcounter.db
+    volumes:
+      - lapcounter-data:/var/lib/lapcounter
+  lapd:
+    image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-m", "lapcounter.lapd"]
+    healthcheck:
+      disable: true
+    environment:
+      LAPCOUNTER_DB: /var/lib/lapcounter/lapcounter.db
+      OPENSTINT_ZMQ: tcp://127.0.0.1:5556
+    volumes:
+      - lapcounter-data:/var/lib/lapcounter
+
+volumes:
+  lapcounter-data:

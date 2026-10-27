@@ -10,4 +10,6 @@ The Pi is provisioned by the Ansible in [`deploy/ansible/`](deploy/ansible):
 - [`provision_race_decoder.yml`](deploy/ansible/docs/provision_race_decoder.md): OpenStint decoder + `openstint-learn`
 - [`register_race_decoder.yml`](deploy/ansible/docs/register_race_decoder.md): AWS SSM registration by Ethernet MAC + CloudWatch agent
 
+The app itself (lapd + web UI, containerized) is in [`app/`](app).
+
 See [docs/design.md](docs/design.md) for the architecture.

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Live timing{% endblock %}
+{% block body %}
+<h1>Live</h1>
+<p id="decoder" class="status unknown" aria-live="polite">Connecting to the decoder…</p>
+<h2>Latest passings</h2>
+<table id="passings">
+  <thead><tr><th>Time</th><th>Transponder</th><th>Signal</th></tr></thead>
+  <tbody><tr class="empty"><td colspan="3">No passings yet.</td></tr></tbody>
+</table>
+<p class="note">Heats, laps and the running order show here once an event is running.</p>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='live.js') }}"></script>{% endblock %}

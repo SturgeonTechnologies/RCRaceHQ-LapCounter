@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block body %}
+<h1>Admin</h1>
+<h2>Decoder</h2>
+{% set d = data.decoder %}
+{% if d.online %}
+  <p class="status ok">Online. Noise floor {{ '%.1f'|format(d.noise) }} dBFS, {{ d.received }} frames/s ({{ d.processed }} clean).</p>
+{% elif d.seen %}
+  <p class="status bad">No data from the decoder for {{ d.age_s }} s. Check <code>systemctl status openstint</code>.</p>
+{% else %}
+  <p class="status bad">Never heard from the decoder at <code>{{ decoder_url }}</code>.</p>
+{% endif %}
+{% if d.learn_event %}
+  <p>Last learning event: {{ d.learn_event }}{% if d.learn_transponder %} ({{ d.learn_transponder }}){% endif %}.</p>
+{% endif %}
+<h2>Coming next</h2>
+<ul>
+  <li>Events and lineups</li>
+  <li>Transponder learning</li>
+  <li>Link to RC Race HQ</li>
+  <li>Network settings</li>
+</ul>
+{% endblock %}

@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "ssm.amazonaws.com" },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": { "aws:SourceAccount": "587449585882" },
+        "ArnLike": { "aws:SourceArn": "arn:aws:ssm:us-west-2:587449585882:*" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{#- Managed by Ansible (role ssm_hybrid_node). Every metric carries a Device
+    dimension (the MAC-derived name), not the hostname, so a renamed or
+    re-imaged Pi keeps the same series. Five metrics ≈ $1.50/device/month. -#}
+{%- set dims = {"Device": ssm_hybrid_node_name} -%}
+{{ {
+  "agent": {
+    "metrics_collection_interval": ssm_hybrid_node_metrics_interval | int,
+    "region": ssm_hybrid_node_region,
+    "run_as_user": "root",
+    "omit_hostname": true
+  },
+  "metrics": {
+    "namespace": ssm_hybrid_node_metrics_namespace,
+    "metrics_collected": {
+      "cpu": {"measurement": ["usage_active"], "totalcpu": true, "append_dimensions": dims},
+      "mem": {"measurement": ["used_percent"], "append_dimensions": dims},
+      "disk": {"measurement": ["used_percent"], "resources": ["/"], "drop_device": true, "append_dimensions": dims},
+      "swap": {"measurement": ["used_percent"], "append_dimensions": dims},
+      "procstat": [
+        {"exe": ssm_hybrid_node_procstat_exe, "measurement": ["pid_count"], "append_dimensions": dims}
+      ]
+    }
+  }
+} | to_nice_json(indent=2) }}

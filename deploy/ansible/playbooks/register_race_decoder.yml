@@ -1,0 +1,13 @@
+---
+# playbooks/register_race_decoder.yml — register race-decoder Pis with AWS
+# Systems Manager (keyed by Ethernet MAC) and install the CloudWatch agent.
+# Docs: docs/register_race_decoder.md
+#
+# The registration calls run on the controller with your AWS credentials
+# (AWS_PROFILE / env / AWX credential). Run provision_race_decoder.yml first.
+- name: Register race decoders with Systems Manager
+  hosts: race_decoders
+  become: true
+  gather_facts: true # needs interfaces/MACs and architecture
+  roles:
+    - ssm_hybrid_node

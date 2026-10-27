@@ -1,0 +1,32 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ActivationsAndLookups",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:CreateActivation",
+        "ssm:DeleteActivation",
+        "ssm:DescribeInstanceInformation",
+        "ssm:AddTagsToResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-west-2" } }
+    },
+    {
+      "Sid": "DeregisterRaceDecodersOnly",
+      "Effect": "Allow",
+      "Action": "ssm:DeregisterManagedInstance",
+      "Resource": "arn:aws:ssm:us-west-2:587449585882:managed-instance/*",
+      "Condition": { "StringEquals": { "aws:ResourceTag/Role": "race-decoder" } }
+    },
+    {
+      "Sid": "PassTheNodeRoleToSsmOnly",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::587449585882:role/RaceDecoderSSMNode",
+      "Condition": { "StringEquals": { "iam:PassedToService": "ssm.amazonaws.com" } }
+    }
+  ]
+}

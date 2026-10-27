@@ -1,0 +1,20 @@
+---
+# inventory/race_decoders.yml — OpenStint lap-timing Pis.
+# Use with: ansible-playbook -i inventory/race_decoders.yml playbooks/provision_race_decoder.yml
+# Hostname is whatever was set in Raspberry Pi Imager; switch ansible_host to
+# the IP if mDNS (.local) doesn't resolve from where you run this.
+all:
+  children:
+    race_decoders:
+      vars:
+        # Device registry for register_race_decoder.yml, keyed by the Pi's
+        # Ethernet MAC (`ip -br link` on the Pi). Unlisted Pis still register
+        # as racedecoder-<mac> unless ssm_hybrid_node_require_known_mac is true.
+        ssm_hybrid_node_devices: {}
+        #   "dc:a6:32:01:02:03":
+        #     name: rcclub-track1
+        #     tags: { Club: rcclub }
+      hosts:
+        racedecoder:
+          ansible_host: racedecoder.local
+          ansible_user: pi

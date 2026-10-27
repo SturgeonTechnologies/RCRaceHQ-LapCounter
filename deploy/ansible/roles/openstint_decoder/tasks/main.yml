@@ -1,0 +1,148 @@
+---
+# tasks/main.yml — openstint_decoder role
+# Validate -> pinned apt repo -> install -> config -> learn helper -> service
+# -> sanity checks. Idempotent: reruns change nothing unless a var changed.
+
+# ── Validate the target ──────────────────────────────────────────────────
+
+- name: Assert 64-bit Debian 13 (Trixie) or newer
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['architecture'] == 'aarch64'
+      - ansible_facts['distribution'] == 'Debian'
+      - (ansible_facts['distribution_major_version'] | int) >= 13
+    fail_msg: >-
+      The upstream openstint package is arm64-only and built for Trixie. This
+      host is {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }} / {{ ansible_facts['architecture'] }}.
+      Re-image with Raspberry Pi OS Lite (64-bit), Trixie.
+
+- name: Read the board model
+  ansible.builtin.slurp:
+    src: /proc/device-tree/model
+  register: openstint_decoder_model_raw
+  failed_when: false
+
+- name: Warn on boards older than a Pi 3 Model B+
+  ansible.builtin.debug:
+    msg: >-
+      {{ openstint_decoder_model }} is below upstream's minimum (Pi 3 Model B+).
+      It may drop sample buffers; watch the 4th/5th fields of the S lines.
+  vars:
+    openstint_decoder_model: "{{ (openstint_decoder_model_raw.content | default('') | b64decode).rstrip('\x00') }}"
+  when:
+    - openstint_decoder_model | length > 0
+    - openstint_decoder_model is search('Raspberry Pi (1|2|Zero|3 Model B Rev)')
+
+# ── Pinned upstream repo ─────────────────────────────────────────────────
+
+- name: Pin the OpenStint repo to the openstint package only
+  ansible.builtin.template:
+    src: openstint.pref.j2
+    dest: /etc/apt/preferences.d/openstint.pref
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add the OpenStint apt repo (upstream line, unsigned)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/openstint.list
+    content: |
+      # Managed by Ansible (role openstint_decoder). Pinned in preferences.d/openstint.pref.
+      deb [trusted=yes arch=arm64] {{ openstint_decoder_apt_repo_url }} /
+    owner: root
+    group: root
+    mode: "0644"
+  register: openstint_decoder_repo
+
+- name: Install the decoder and the learn helper's dependency
+  ansible.builtin.apt:
+    name:
+      - openstint
+      - python3-zmq
+    state: "{{ openstint_decoder_package_state }}"
+    update_cache: true
+    cache_valid_time: "{{ 0 if openstint_decoder_repo is changed else 3600 }}"
+  notify: Restart openstint
+
+# ── Config + helper ──────────────────────────────────────────────────────
+
+- name: Render /etc/openstint.conf
+  ansible.builtin.template:
+    src: openstint.conf.j2
+    dest: /etc/openstint.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart openstint
+
+- name: Let login users edit the .rc4 registry without sudo
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: users
+    append: true
+  loop: "{{ openstint_decoder_registry_users }}"
+
+- name: Install openstint-learn
+  ansible.builtin.copy:
+    src: openstint-learn
+    dest: /usr/local/bin/openstint-learn
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Enable and start the decoder
+  ansible.builtin.systemd_service:
+    name: openstint.service
+    enabled: true
+    state: started
+
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  when: openstint_decoder_manage_ufw | bool
+
+- name: Allow SSH through ufw (before enabling it)
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+  when: openstint_decoder_manage_ufw | bool
+
+- name: Allow the decoder's ZeroMQ feed from the timing network only
+  community.general.ufw:
+    rule: allow
+    port: "{{ openstint_decoder_zmq_port | string }}"
+    proto: tcp
+    from_ip: "{{ openstint_decoder_zmq_allowed_cidr }}"
+  when: openstint_decoder_manage_ufw | bool
+
+- name: Enable ufw (default deny incoming)
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+  when: openstint_decoder_manage_ufw | bool
+
+- name: Apply config changes now
+  ansible.builtin.meta: flush_handlers
+
+# ── Sanity checks (report, don't fail: the SDR may simply be unplugged) ──
+
+- name: Look for an RTL-SDR on USB (0bda:2838 / 0bda:2832)
+  ansible.builtin.command: lsusb
+  register: openstint_decoder_lsusb
+  changed_when: false
+  failed_when: false
+
+- name: Read service state
+  ansible.builtin.service_facts:
+
+- name: Summary
+  ansible.builtin.debug:
+    msg:
+      - "openstint.service: {{ ansible_facts.services['openstint.service'].state | default('unknown') }}"
+      - "RTL-SDR on USB: {{ 'yes' if openstint_decoder_lsusb.stdout is search('0bda:283[28]') else 'NOT FOUND (plug it in; the service retries every 5 s)' }}"
+      - "Watch it:  journalctl -u openstint -f   (S lines every second)"
+      - "Learn one: openstint-learn <label number>"
+      - "Feed:      tcp://{{ ansible_host | default(inventory_hostname) }}:{{ openstint_decoder_zmq_port }}"

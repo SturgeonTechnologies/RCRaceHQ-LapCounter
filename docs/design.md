@@ -35,7 +35,7 @@ Status: draft for review. Nothing here is built yet.
 - If both `eth0` and `wlan1` are enabled, `eth0` wins (lower route metric) and `wlan1`
   is a failover.
 - Disabling `eth0` as an uplink does **not** change the device identity: SSM
-  registration still uses the `eth0` MAC (OPS_ansible #12).
+  registration still uses the `eth0` MAC (`deploy/ansible`, role `ssm_hybrid_node`).
 - Managed with NetworkManager profiles; the web UI writes profiles through `nmcli`
   via a small privileged helper (no root in the web process).
 - Captive portal: dnsmasq resolves everything to the Pi while there is no admin yet,
@@ -278,7 +278,7 @@ if they are more than 3 s old, so the announcer never falls behind the race.
    `announcerd` (countdown, start/finish, learn announcement) lands with steps 1 and 3.
 4. RC Race HQ side: pairing API, IoT thing/policy, `ingestLapCounter`, laps table.
 5. `syncd`: pairing, event import, outbox, S3 `.rc4` sync.
-6. Captive portal + network settings; Ansible role in OPS_ansible installs it all.
+6. Captive portal + network settings; the Ansible in `deploy/ansible` installs it all.
 
 ## Open questions
 

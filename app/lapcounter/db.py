@@ -47,6 +47,37 @@ MIGRATIONS: tuple[str, ...] = (
         learn_at_ms INTEGER
     );
     """,
+    # 2: transponder learning (learn sessions, every L line, learned transponders)
+    """
+    CREATE TABLE learn_event (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event TEXT NOT NULL,
+        transponder INTEGER,
+        value REAL,
+        received_at_ms INTEGER NOT NULL
+    );
+    CREATE INDEX learn_event_received ON learn_event (received_at_ms);
+    CREATE TABLE learn_session (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label INTEGER NOT NULL,
+        racer_name TEXT,
+        state TEXT NOT NULL,
+        started_at_ms INTEGER NOT NULL,
+        finished_at_ms INTEGER,
+        auto_id INTEGER,
+        payloads INTEGER,
+        error TEXT
+    );
+    CREATE UNIQUE INDEX learn_session_one_open ON learn_session (state) WHERE state = 'open';
+    CREATE TABLE transponder (
+        number INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL,
+        racer_name TEXT,
+        rc4_sha256 TEXT,
+        learned_at_ms INTEGER NOT NULL,
+        source TEXT NOT NULL
+    );
+    """,
 )
 
 
@@ -161,6 +192,98 @@ def update_learn(conn: sqlite3.Connection, *, event: str, transponder: int | Non
         " learn_at_ms = excluded.learn_at_ms",
         (at, event, transponder, at),
     )
+
+
+def insert_learn_event(conn: sqlite3.Connection, *, event: str, transponder: int | None,
+                       value: float | None, received_at_ms: int | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO learn_event (event, transponder, value, received_at_ms) VALUES (?, ?, ?, ?)",
+        (event, transponder, value, received_at_ms or now_ms()),
+    )
+    return int(cur.lastrowid)
+
+
+def learn_events_since(conn: sqlite3.Connection, since_ms: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT event, transponder, value, received_at_ms FROM learn_event"
+        " WHERE received_at_ms >= ? ORDER BY id",
+        (since_ms,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def passing_seen_since(conn: sqlite3.Connection, transponder: int, since_ms: int) -> dict | None:
+    row = conn.execute(
+        "SELECT transponder, rssi, received_at_ms FROM passing"
+        " WHERE transponder = ? AND received_at_ms >= ? ORDER BY id LIMIT 1",
+        (transponder, since_ms),
+    ).fetchone()
+    return None if row is None else dict(row)
+
+
+# --- learning sessions and transponders --------------------------------------
+
+def open_learn_session(conn: sqlite3.Connection, label: int, racer_name: str | None,
+                       at_ms: int | None = None) -> int:
+    """Start a learn session; any session still open is cancelled (one pad, one at a time)."""
+    at = at_ms or now_ms()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute(
+            "UPDATE learn_session SET state = 'cancelled', finished_at_ms = ? WHERE state = 'open'",
+            (at,),
+        )
+        cur = conn.execute(
+            "INSERT INTO learn_session (label, racer_name, state, started_at_ms)"
+            " VALUES (?, ?, 'open', ?)",
+            (label, racer_name, at),
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return int(cur.lastrowid)
+
+
+def get_learn_session(conn: sqlite3.Connection, session_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM learn_session WHERE id = ?", (session_id,)).fetchone()
+    return None if row is None else dict(row)
+
+
+def current_learn_session(conn: sqlite3.Connection) -> dict | None:
+    row = conn.execute("SELECT * FROM learn_session WHERE state = 'open'").fetchone()
+    return None if row is None else dict(row)
+
+
+def close_learn_session(conn: sqlite3.Connection, session_id: int, state: str, *,
+                        auto_id: int | None = None, payloads: int | None = None,
+                        error: str | None = None, at_ms: int | None = None) -> bool:
+    """Close an open session. False if it was already closed (double submit, other tab)."""
+    cur = conn.execute(
+        "UPDATE learn_session SET state = ?, finished_at_ms = ?, auto_id = ?, payloads = ?,"
+        " error = ? WHERE id = ? AND state = 'open'",
+        (state, at_ms or now_ms(), auto_id, payloads, error, session_id),
+    )
+    return cur.rowcount == 1
+
+
+def upsert_transponder(conn: sqlite3.Connection, *, number: int, kind: str,
+                       racer_name: str | None, rc4_sha256: str | None, source: str,
+                       at_ms: int | None = None) -> None:
+    conn.execute(
+        "INSERT INTO transponder (number, kind, racer_name, rc4_sha256, learned_at_ms, source)"
+        " VALUES (?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(number) DO UPDATE SET kind = excluded.kind,"
+        " racer_name = COALESCE(excluded.racer_name, transponder.racer_name),"
+        " rc4_sha256 = excluded.rc4_sha256, learned_at_ms = excluded.learned_at_ms,"
+        " source = excluded.source",
+        (number, kind, racer_name, rc4_sha256, at_ms or now_ms(), source),
+    )
+
+
+def list_transponders(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("SELECT * FROM transponder ORDER BY learned_at_ms DESC").fetchall()
+    return [dict(r) for r in rows]
 
 
 def recent_passings(conn: sqlite3.Connection, *, after_id: int = 0, limit: int = 50) -> list[dict]:

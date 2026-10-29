@@ -11,8 +11,13 @@ services:
     restart: unless-stopped
     environment:
       LAPCOUNTER_DB: /var/lib/lapcounter/lapcounter.db
+      OPENSTINT_RC4_DIR: /var/lib/openstint
+    # OpenStint's .rc4 folder (root:users 2775): Record renames files in it, so
+    # the web container joins the folder's group (users = gid 100).
+    group_add: ["100"]
     volumes:
       - lapcounter-data:/var/lib/lapcounter
+      - /var/lib/openstint:/var/lib/openstint
   lapd:
     image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}
     network_mode: host

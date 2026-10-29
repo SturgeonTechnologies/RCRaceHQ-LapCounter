@@ -35,12 +35,12 @@ cancels the open one (there is one pad).
 
 | Message | Meaning / what to do |
 |---|---|
-| Already learned | `<number>.rc4` already exists. Delete it on the Pi to learn again. |
+| Already learned | `<number>.rc4` already exists. Press **Delete** next to it in the list to learn it again. |
 | 1000-9999 are reserved | The decoder numbers new transponders 1000-9999, so labels in that range would clash. Check the label. |
 | Already known as N | The decoder already has this transponder filed under another number N. Check the label, or delete `N.rc4` and learn again. |
 | The decoder already sees this transponder as <number> | RC3 / Hybrid, or learned before. Record just adds it to the list (type "RC3 / Hybrid" if there is no file). |
 | Nothing heard for 10 minutes | Session expired; cancel and start again. |
-| Decoder files nobody recorded yet: 1000.rc4 … | Something was learned but never recorded (cancelled, or the car sat on the loop). Rename it on the Pi (`mv 1000.rc4 <label>.rc4`) or delete it. |
+| Decoder files nobody recorded yet: 1000.rc4 … | Something was learned but never recorded (cancelled, or the car sat on the loop). Press **Delete** next to it, or rename it on the Pi (`mv 1000.rc4 <label>.rc4`). |
 | No permission to write in /var/lib/openstint | The web container can't write the decoder's folder; see [Permissions](#permissions). |
 
 ## How it works
@@ -85,6 +85,7 @@ browser ──► POST /transponders/learn/<id>/record ──► rename <auto_id
 | GET | `/api/learn/<id>` | session state JSON (polled every second) |
 | POST | `/transponders/learn/<id>/record` | rename + record |
 | POST | `/transponders/learn/<id>/cancel` | cancel |
+| POST | `/transponders/<number>/delete` | delete `<number>.rc4` (if any) and the list row |
 
 ## Permissions
 
@@ -98,6 +99,15 @@ container:
 The `lapcounter_app` role in RCRaceHQ-LapCounter-Deploy sets both up; the
 local `app/compose.yaml` does the same. `lapd` doesn't need the folder.
 
+## Deleting a transponder
+
+**Delete** (next to each row, and next to any stray `1000-9999.rc4`) removes
+`<number>.rc4` from the decoder's folder and the row from the list, after a
+confirm. The decoder drops a transponder whose file is gone on its next
+folder scan (about a second; openstint `src/rc4.cpp`), so it can be learned
+again straight away. Same permissions as Record: the app needs write access
+to the folder.
+
 ## Not built yet
 
 - The learning pad's RF relay (`learnd`): for now learn on the track loop or
@@ -105,4 +115,3 @@ local `app/compose.yaml` does the same. `lapd` doesn't need the folder.
   isn't blocked yet.
 - Spoken "…, learned" announcement (`announcerd`).
 - Uploading `.rc4` files to RC Race HQ (`syncd`).
-- Deleting a transponder from the page (delete `<number>.rc4` on the Pi).

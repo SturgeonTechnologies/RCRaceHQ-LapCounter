@@ -184,3 +184,17 @@ def rename_learned(rc4_dir: str | Path, auto_id: int, label: int,
         raise LearnError(f"No permission to write in {rc4_dir}. The app needs the "
                          "folder's group (see the lapcounter_app role).") from None
     return target
+
+
+def delete_learned(rc4_dir: str | Path, number: int) -> bool:
+    """Remove `<number>.rc4`. The decoder drops it on its next folder scan
+    (openstint src/rc4.cpp), so the transponder can be learned again."""
+    path = rc4_path(rc4_dir, number)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except PermissionError:
+        raise LearnError(f"No permission to write in {rc4_dir}. The app needs the "
+                         "folder's group (see the lapcounter_app role).") from None
+    return True

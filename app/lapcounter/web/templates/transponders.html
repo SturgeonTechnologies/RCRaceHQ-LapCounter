@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Transponders{% endblock %}
+{% macro delete_button(number) -%}
+<form method="post" action="{{ url_for('transponders.delete', number=number) }}" class="inline"
+      data-confirm="Delete {{ number }}? The decoder forgets it and it has to be learned again.">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <button type="submit" class="link">Delete</button>
+</form>
+{%- endmacro %}
 {% block body %}
 <h1>Transponders</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if deleted %}<p class="status ok" role="status">Deleted {{ deleted }}. It can be learned again.</p>{% endif %}
 
 <h2>Learn a transponder</h2>
 {% if current %}
@@ -24,14 +32,14 @@ send their own number and just get added to the list.</p>
 </form>
 
 {% if strays %}
-<p class="error">Decoder files nobody recorded yet: {% for n in strays %}{{ n }}.rc4{% if not loop.last %}, {% endif %}{% endfor %}.
-  The decoder reports those transponders by that number until they're renamed or deleted on the Pi.</p>
+<p class="error">Decoder files nobody recorded yet: {% for n in strays %}{{ n }}.rc4 {{ delete_button(n) }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  The decoder reports those transponders by that number until they're deleted.</p>
 {% endif %}
 
 <h2>Known transponders</h2>
 {% if transponders or unlisted_files %}
 <table>
-  <thead><tr><th>Number</th><th>Racer</th><th>Type</th><th>Learned</th></tr></thead>
+  <thead><tr><th>Number</th><th>Racer</th><th>Type</th><th>Learned</th><th></th></tr></thead>
   <tbody>
   {% for t in transponders %}
     <tr>
@@ -39,10 +47,11 @@ send their own number and just get added to the list.</p>
       <td>{{ t.racer_name or "" }}</td>
       <td>{% if t.kind == "rc4" %}RC4{% if t.number not in has_file %} <span class="error">(file missing)</span>{% endif %}{% else %}RC3 / Hybrid{% endif %}</td>
       <td class="ts" data-ms="{{ t.learned_at_ms }}"></td>
+      <td>{{ delete_button(t.number) }}</td>
     </tr>
   {% endfor %}
   {% for n in unlisted_files %}
-    <tr><td>{{ n }}</td><td></td><td>RC4 (file only)</td><td></td></tr>
+    <tr><td>{{ n }}</td><td></td><td>RC4 (file only)</td><td></td><td>{{ delete_button(n) }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -50,4 +59,5 @@ send their own number and just get added to the list.</p>
 <p>None yet.</p>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>
+<script src="{{ url_for('static', filename='confirm.js') }}"></script>{% endblock %}

@@ -1,4 +1,4 @@
-"""Admin → Transponders: list what's known, learn a new one, record it.
+"""Admin → Transponders: list what's known, learn a new one, record it, delete it.
 
 Flow (docs/learning.md): type the label number → Learn page polls
 /api/learn/<id> while the decoder learns → Record renames the decoder's
@@ -75,6 +75,7 @@ def index():
         strays=learning.stray_auto_files(rc4_dir),
         current=db.current_learn_session(conn),
         error=request.args.get("error"),
+        deleted=request.args.get("deleted", type=int),
     )
 
 
@@ -92,7 +93,7 @@ def start():
     if label in learning.learned_numbers(_cfg().rc4_dir):
         return redirect(url_for(
             "transponders.index",
-            error=f"{label} is already learned. Delete {label}.rc4 on the Pi to learn it again."))
+            error=f"{label} is already learned. Delete it below to learn it again."))
     session_id = db.open_learn_session(conn, label, name)
     return redirect(url_for("transponders.learn", session_id=session_id))
 
@@ -163,3 +164,25 @@ def cancel(session_id: int):
     _session_or_404(conn, session_id)
     db.close_learn_session(conn, session_id, "cancelled")
     return redirect(url_for("transponders.index"))
+
+
+@bp.post("/transponders/<int:number>/delete")
+@login_required
+def delete(number: int):
+    """Forget a transponder: its `.rc4` file (if any) and its row in the list.
+
+    Also takes the decoder's own 1000-9999 numbers, so a stray file nobody
+    recorded can be cleared from the page.
+    """
+    from . import get_db
+    check_csrf()
+    conn = get_db()
+    try:
+        had_file = learning.delete_learned(_cfg().rc4_dir, number)
+    except learning.LearnError as exc:
+        return redirect(url_for("transponders.index", error=str(exc)))
+    had_row = db.delete_transponder(conn, number)
+    if not (had_file or had_row):
+        return redirect(url_for("transponders.index", error=f"{number} isn't known."))
+    current_app.logger.info("deleted transponder %s (file=%s, listed=%s)", number, had_file, had_row)
+    return redirect(url_for("transponders.index", deleted=number))

@@ -9,14 +9,14 @@ holds the services and web UI around it, and the hardware.
 |---|---|
 | [`app/`](app) | The app: `lapd` (decoder feed → SQLite) + `web` (setup, admin, live view). Python, one container image |
 | [`docs/design.md`](docs/design.md) | Architecture and build order |
-| [`docs/build.md`](docs/build.md) | Building the image, CI → ECR, releases, one-time AWS setup |
+| [`docs/build.md`](docs/build.md) | Building the image, CI → GHCR (native arm64), releases |
 | [`hardware/burst-detector-hat/`](hardware/burst-detector-hat) | Burst-detector HAT for the Pi (KiCad, fab files) |
 
 ## Where things live
 
 - **This repo**: the code that runs as the service, and its image.
-  CI tests every PR, builds `linux/arm64`, and on `main` / `v*` tags pushes to
-  `587449585882.dkr.ecr.us-west-2.amazonaws.com/rcracehq/lapcounter`.
+  CI tests every PR, builds `linux/arm64` on an arm64 runner, and on `main` /
+  `v*` tags pushes to `ghcr.io/sturgeontechnologies/rcracehq-lapcounter`.
 - **[RCRaceHQ-LapCounter-Deploy](https://github.com/SturgeonTechnologies/RCRaceHQ-LapCounter-Deploy)**:
   the Ansible. Provisions the Pi (OpenStint decoder, event hotspot + captive
   portal, SSM registration) and deploys a pinned image tag of this app with

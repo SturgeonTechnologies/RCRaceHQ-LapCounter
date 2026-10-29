@@ -45,7 +45,8 @@ pip install -e '.[test]' && pytest
 
 ## Image and deploy
 
-CI builds a `linux/arm64` image and pushes it to ECR (`rcracehq/lapcounter`,
+CI builds a `linux/arm64` image and pushes it to GHCR
+(`ghcr.io/sturgeontechnologies/rcracehq-lapcounter`,
 `:sha-<7>` from `main`, `:vX.Y.Z` from tags): [../docs/build.md](../docs/build.md).
 The Pi runs it through `deploy_lapcounter_app.yml` in
 [RCRaceHQ-LapCounter-Deploy](https://github.com/SturgeonTechnologies/RCRaceHQ-LapCounter-Deploy).

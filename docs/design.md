@@ -78,6 +78,10 @@ plus short transactions are enough at this write rate (a few passings per second
 
 ## Pairing to RC Race HQ
 
+See [club-sync.md](club-sync.md) for the current club sync design (pairing, event
+download, check-in, scoring, takeover); it supersedes this section and the next two
+where they differ.
+
 No RC Race HQ username/password is entered on the Pi.
 
 1. Admin → Settings → **Link to RC Race HQ**. Requires internet.

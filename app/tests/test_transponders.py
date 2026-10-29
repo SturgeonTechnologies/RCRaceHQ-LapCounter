@@ -154,3 +154,60 @@ def test_list_flags_strays_and_unlisted_files(admin, rc4):
 def test_unknown_session_404(admin):
     assert admin.get("/transponders/learn/999").status_code == 404
     assert admin.get("/api/learn/999").status_code == 404
+
+
+def test_delete_recorded_rc4_then_learn_again(admin, rc4):
+    (rc4 / "8954097.rc4").write_bytes(b"rc4-code")
+    db.upsert_transponder(admin.conn, number=8954097, kind="rc4", racer_name="Paul",
+                          rc4_sha256="x" * 64, source="learned")
+    admin.conn.commit()
+    assert b"already learned" in admin.get(start(admin).headers["Location"]).data
+
+    r = post(admin, "/transponders/8954097/delete")
+    assert r.status_code == 302 and "deleted=8954097" in r.headers["Location"]
+    assert not (rc4 / "8954097.rc4").exists()
+    assert db.list_transponders(admin.conn) == []
+    assert b"Deleted 8954097" in admin.get(r.headers["Location"]).data
+    assert "/transponders/learn/" in start(admin).headers["Location"]
+
+
+def test_delete_direct_transponder_has_no_file(admin, rc4):
+    db.upsert_transponder(admin.conn, number=4321000, kind="direct", racer_name=None,
+                          rc4_sha256=None, source="learned")
+    admin.conn.commit()
+    assert "deleted=4321000" in post(admin, "/transponders/4321000/delete").headers["Location"]
+    assert db.list_transponders(admin.conn) == []
+
+
+def test_delete_stray_auto_file(admin, rc4):
+    (rc4 / "1000.rc4").write_bytes(b"x")
+    page = admin.get("/transponders").data
+    assert b"1000.rc4" in page and b'action="/transponders/1000/delete"' in page
+    post(admin, "/transponders/1000/delete")
+    assert not (rc4 / "1000.rc4").exists()
+    assert b"nobody recorded" not in admin.get("/transponders").data
+
+
+def test_delete_unknown_number(admin):
+    r = post(admin, "/transponders/5550001/delete")
+    assert "error=" in r.headers["Location"] and "known" in r.headers["Location"]
+
+
+def test_delete_needs_csrf_and_login(admin, rc4):
+    (rc4 / "8954097.rc4").write_bytes(b"x")
+    assert admin.post("/transponders/8954097/delete", data={}).status_code in (400, 403)
+    assert (rc4 / "8954097.rc4").exists()
+    post(admin, "/logout")
+    r = admin.post("/transponders/8954097/delete", data={})
+    assert r.status_code in (302, 400, 403)
+    assert (rc4 / "8954097.rc4").exists()
+
+
+def test_delete_without_write_permission(admin, rc4, monkeypatch):
+    (rc4 / "8954097.rc4").write_bytes(b"x")
+
+    def deny(self):
+        raise PermissionError
+    monkeypatch.setattr(type(rc4), "unlink", deny)
+    r = post(admin, "/transponders/8954097/delete")
+    assert "No+permission" in r.headers["Location"]

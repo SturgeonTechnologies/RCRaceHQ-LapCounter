@@ -281,6 +281,11 @@ def upsert_transponder(conn: sqlite3.Connection, *, number: int, kind: str,
     )
 
 
+def delete_transponder(conn: sqlite3.Connection, number: int) -> bool:
+    cur = conn.execute("DELETE FROM transponder WHERE number = ?", (number,))
+    return cur.rowcount == 1
+
+
 def list_transponders(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM transponder ORDER BY learned_at_ms DESC").fetchall()
     return [dict(r) for r in rows]

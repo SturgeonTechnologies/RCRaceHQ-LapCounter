@@ -1,7 +1,8 @@
 # Runs next to openstint.service on the Pi. Host networking so lapd reaches the
 # decoder on 127.0.0.1:5556 and the web port is reachable on the hotspot and
-# (with race_hotspot_web_on_eth0) the wired side. The lapcounter_app role will
-# template this file with a pinned image tag; this copy is for local runs.
+# (with race_hotspot_web_on_eth0) the wired side. On the Pi, the lapcounter_app
+# role in RCRaceHQ-LapCounter-Deploy renders its own copy with a pinned ECR
+# image and a bind-mounted /var/lib/lapcounter; this one is for local runs.
 services:
   web:
     image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}

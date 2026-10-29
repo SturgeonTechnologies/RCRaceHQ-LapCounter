@@ -274,7 +274,8 @@ if they are more than 3 s old, so the announcer never falls behind the race.
 
 1. `lapd` + SQLite + minimal live page against a running `openstint` (driveway test).
 2. Setup wizard, local admin, lineup builder (offline only).
-3. Learning flow with the pad and relay (local files only).
+3. Learning flow with the pad and relay (local files only). The Learn page and
+   Record step are built ([learning.md](learning.md)); the pad's RF relay is not.
    `announcerd` (countdown, start/finish, learn announcement) lands with steps 1 and 3.
 4. RC Race HQ side: pairing API, IoT thing/policy, `ingestLapCounter`, laps table.
 5. `syncd`: pairing, event import, outbox, S3 `.rc4` sync.

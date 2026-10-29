@@ -1,4 +1,4 @@
-"""Flask web app: first-run admin setup, local login, live view.
+"""Flask web app: first-run admin setup, local login, live view, transponders.
 
     gunicorn -k gthread --threads 8 -b 0.0.0.0:8080 'lapcounter.web:create_app()'
 
@@ -42,9 +42,10 @@ def create_app(cfg: Config | None = None, *, testing: bool = False) -> Flask:
         MAX_CONTENT_LENGTH=64 * 1024,
     )
 
-    from . import auth, live
+    from . import auth, live, transponders
     app.register_blueprint(auth.bp)
     app.register_blueprint(live.bp)
+    app.register_blueprint(transponders.bp)
 
     @app.get("/healthz", endpoint="health")
     def health():

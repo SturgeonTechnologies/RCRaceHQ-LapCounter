@@ -14,6 +14,8 @@ def test_handle_stores_each_kind(tmp_path):
     assert (p["transponder"], p["received_at_ms"], p["hits"]) == (8954097, 5000, 4096)
     s = db.decoder_status(conn)
     assert (s["received"], s["learn_event"], s["learn_transponder"]) == (755, "DONE", 1000)
+    (e,) = db.learn_events_since(conn, 0)
+    assert (e["event"], e["transponder"], e["value"], e["received_at_ms"]) == ("DONE", 1000, 40.0, 7000)
 
 
 def test_run_survives_database_errors(tmp_path, monkeypatch):

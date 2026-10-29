@@ -1,8 +1,8 @@
 """lapd: subscribe to OpenStint's ZeroMQ feed and record what it hears.
 
-Step 1 of the build order: every passing is stored raw, and decoder stats and
-learning state are kept current for the live page. Assigning passings to heats
-and computing laps lands with the heat model.
+Every passing is stored raw, decoder stats are kept current for the live page,
+and every learning line is logged for the Learn page. Assigning passings to
+heats and computing laps lands with the heat model.
 
 Runs as its own process so a web crash never loses a passing.
 
@@ -39,6 +39,8 @@ def handle(conn: sqlite3.Connection, raw: str, now: Callable[[], int] = db.now_m
         return "S"
     if isinstance(msg, decoder.Learn):
         db.update_learn(conn, event=msg.event, transponder=msg.transponder, at_ms=at)
+        db.insert_learn_event(conn, event=msg.event, transponder=msg.transponder,
+                              value=msg.value, received_at_ms=at)
         LOG.info("learn %s %s", msg.event, msg.transponder or "")
         return "L"
     return None

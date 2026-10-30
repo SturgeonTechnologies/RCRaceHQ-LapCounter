@@ -36,6 +36,7 @@ def session_view(conn, session: dict, now_ms: int) -> learning.View | None:
         db.learn_events_since(conn, since),
         db.passing_seen_since(conn, session["label"], since),
         now_ms,
+        db.last_learn_event_before(conn, since),
     )
 
 

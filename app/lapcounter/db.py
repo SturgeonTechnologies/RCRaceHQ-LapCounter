@@ -221,6 +221,15 @@ def learn_events_since(conn: sqlite3.Connection, since_ms: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def last_learn_event_before(conn: sqlite3.Connection, before_ms: int) -> dict | None:
+    row = conn.execute(
+        "SELECT event, transponder, value, received_at_ms FROM learn_event"
+        " WHERE received_at_ms < ? ORDER BY id DESC LIMIT 1",
+        (before_ms,),
+    ).fetchone()
+    return None if row is None else dict(row)
+
+
 def passing_seen_since(conn: sqlite3.Connection, transponder: int, since_ms: int) -> dict | None:
     row = conn.execute(
         "SELECT transponder, rssi, received_at_ms FROM passing"

@@ -28,6 +28,7 @@ EXPECTED_LEARN_S = 12.0           # RC4; an RC4 Hybrid takes ~25 s
 SESSION_TIMEOUT_S = 600
 
 WAITING = "waiting"
+LIFT = "lift"                 # decoder still holds the last learn; needs a 1 s gap
 LEARNING = "learning"
 INTERRUPTED = "interrupted"
 READY = "ready"               # DONE with an auto id: Record renames the file
@@ -37,6 +38,8 @@ EXPIRED = "expired"
 
 MESSAGES = {
     WAITING: "Turn on only this transponder and set it still on the pad or loop. Hands off.",
+    LIFT: "The decoder is still holding its last learn. Lift the car off the loop "
+          "(or switch the transponder off) for 2 seconds, then set it back.",
     LEARNING: "Learning. Keep it still; this takes about 12 s (25 s for a Hybrid).",
     INTERRUPTED: "It moved or the signal dropped. Keep it still; the decoder retries by itself.",
     READY: "Learned. Press Record to save it under the label number.",
@@ -92,8 +95,14 @@ class View:
 
 
 def describe(session: dict, events: list[dict], label_passing: dict | None,
-             now_ms: int) -> View:
-    """State of an open session from the L lines (and passings) since it started."""
+             now_ms: int, before: dict | None = None) -> View:
+    """State of an open session from the L lines (and passings) since it started.
+
+    `before` is the last L line from before the session. After a DONE the
+    decoder won't START again until it hears nothing for more than 1 s (RESET,
+    openstint src/rc4.cpp), so a transponder left sitting on the loop since its
+    last learn just waits forever. That case gets the LIFT hint.
+    """
     label = session["label"]
     state, started, auto_id, payloads = WAITING, None, None, None
     for ev in events:
@@ -122,6 +131,9 @@ def describe(session: dict, events: list[dict], label_passing: dict | None,
 
     if state == WAITING and now_ms - session["started_at_ms"] > SESSION_TIMEOUT_S * 1000:
         state = EXPIRED
+
+    if state == WAITING and not events and before is not None and before["event"] == "DONE":
+        state = LIFT
 
     elapsed = 0.0
     progress = 0

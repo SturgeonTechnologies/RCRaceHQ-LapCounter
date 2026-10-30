@@ -71,6 +71,17 @@ def test_expires_when_nothing_happens():
     assert L.describe(SESSION, [ev("START", 600_000)], None, 1_000 + 601_000).state == L.LEARNING
 
 
+def test_lift_when_decoder_still_holds_last_learn():
+    done = ev("DONE", 500, 1000, 40.0)
+    v = L.describe(SESSION, [], None, 2_000, before=done)
+    assert v.state == L.LIFT and "Lift" in v.message and not v.can_record
+    # after a RESET (it went quiet) the plain waiting step is right
+    assert L.describe(SESSION, [], None, 2_000, before=ev("RESET", 600)).state == L.WAITING
+    # and as soon as the decoder reports anything in the session, the hint goes
+    assert L.describe(SESSION, [ev("RESET", 1_500)], None, 2_000, before=done).state == L.WAITING
+    assert L.describe(SESSION, [ev("START", 1_500)], None, 2_000, before=done).state == L.LEARNING
+
+
 def test_rename_learned(tmp_path):
     (tmp_path / "1000.rc4").write_bytes(b"code")
     target = L.rename_learned(tmp_path, 1000, 8954097)

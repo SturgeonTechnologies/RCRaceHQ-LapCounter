@@ -60,3 +60,13 @@ def test_recent_passings_order_and_cursor(tmp_path):
     assert [p["transponder"] for p in db.recent_passings(conn)] == [1, 2, 3]
     assert [p["transponder"] for p in db.recent_passings(conn, after_id=ids[0])] == [2, 3]
     assert [p["transponder"] for p in db.recent_passings(conn, limit=2)] == [2, 3]
+
+
+def test_last_learn_event_before(tmp_path):
+    conn = db.open_db(str(tmp_path / "x.db"))
+    assert db.last_learn_event_before(conn, 5_000) is None
+    db.insert_learn_event(conn, event="START", transponder=None, value=-10.0, received_at_ms=1_000)
+    db.insert_learn_event(conn, event="DONE", transponder=1000, value=40.0, received_at_ms=2_000)
+    db.insert_learn_event(conn, event="RESET", transponder=None, value=None, received_at_ms=6_000)
+    assert db.last_learn_event_before(conn, 5_000)["event"] == "DONE"
+    assert db.last_learn_event_before(conn, 7_000)["event"] == "RESET"

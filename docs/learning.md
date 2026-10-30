@@ -35,6 +35,7 @@ cancels the open one (there is one pad).
 
 | Message | Meaning / what to do |
 |---|---|
+| Still holding its last learn | After a learn finishes, the decoder won't start another until it hears nothing for over 1 s. Lift the car off the loop (or switch the transponder off) for 2 s and set it back. Common right after **Delete** with the car still on the loop. |
 | Already learned | `<number>.rc4` already exists. Press **Delete** next to it in the list to learn it again. |
 | 1000-9999 are reserved | The decoder numbers new transponders 1000-9999, so labels in that range would clash. Check the label. |
 | Already known as N | The decoder already has this transponder filed under another number N. Check the label, or delete `N.rc4` and learn again. |

@@ -8,8 +8,8 @@
   var progress = document.getElementById("progress");
   var signal = document.getElementById("signal");
   var record = document.getElementById("record");
-  var STEP = { waiting: 0, expired: 0, learning: 1, interrupted: 1, ready: 2, known: 2, conflict: 1 };
-  var CLASS = { ready: "ok", known: "ok", conflict: "bad", expired: "bad", interrupted: "bad" };
+  var STEP = { waiting: 0, lift: 0, expired: 0, learning: 1, interrupted: 1, ready: 2, known: 2, conflict: 1 };
+  var CLASS = { ready: "ok", known: "ok", conflict: "bad", expired: "bad", interrupted: "bad", lift: "bad" };
 
   function render(s) {
     if (s.closed) { window.location.reload(); return; }

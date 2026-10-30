@@ -188,7 +188,7 @@ back from S3, so learned transponders are not lost.
 | # | Repo | Scope | How we test it |
 |---|---|---|---|
 | 1 | RCRaceHQ | Lap counters table, pairing API, Manage → Lap counters page, IoT thing/policy/role alias, credentials spike | Pair from a laptop script against dev; spike result in the PR |
-| 2 | LapCounter | `syncd` pairing + Settings → Link | Pair .197 to the dev club |
+| 2 | LapCounter | Pairing + Settings → Link ([linking.md](linking.md); done in `web`, syncd comes with PR 4) | Pair .197 to the dev club |
 | 3 | RCRaceHQ | Car picker at registration, `trackId` on events, `lapCounterEvents` + event pack, Cars to learn | Register on dev, pack appears in S3 |
 | 4 | LapCounter | Event download, Events page, checkout | .197 shows the dev event's heats |
 | 5 | LapCounter | Race director: check-in with pad, walk-ups, run a heat, best-lap qualifying | Driveway heat with real transponders |

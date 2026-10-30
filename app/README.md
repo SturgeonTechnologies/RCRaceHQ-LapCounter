@@ -2,12 +2,13 @@
 
 Python package `lapcounter`: the services that run next to OpenStint on the Pi.
 See [../docs/design.md](../docs/design.md) for the full design. Built so far:
-lapd + SQLite + live page + local admin (step 1) and transponder learning
-([../docs/learning.md](../docs/learning.md)).
+lapd + SQLite + live page + local admin (step 1), transponder learning
+([../docs/learning.md](../docs/learning.md)) and linking to RC Race HQ
+([../docs/linking.md](../docs/linking.md)).
 
 | Service | Command | What it does now |
 |---|---|---|
-| `web` | `gunicorn … 'lapcounter.web:create_app()'` | First-run admin setup, admin sign-in, public live view (SSE), Admin → Transponders (learn + record) |
+| `web` | `gunicorn … 'lapcounter.web:create_app()'` | First-run admin setup, admin sign-in, public live view (SSE), Admin → Transponders (learn + record), Settings → Link to RC Race HQ |
 | `lapd` | `python -m lapcounter.lapd` | Subscribes to OpenStint's ZeroMQ feed (`:5556`), stores passings, decoder stats and every learning (`L`) line in SQLite |
 
 Both share `/var/lib/lapcounter/lapcounter.db` (WAL). Not built yet: heats and
@@ -29,7 +30,8 @@ LAPCOUNTER_DB=./dev.db flask --app 'lapcounter.web:create_app()' run -p 8080
 ```
 
 Open `http://<pi>:8080/`. The first visit goes to **Set up the lap counter**.
-Transponders are at `/transponders` once you're signed in.
+Transponders are at `/transponders` and the RC Race HQ link at `/settings`
+once you're signed in.
 
 ## Environment
 
@@ -39,6 +41,8 @@ Transponders are at `/transponders` once you're signed in.
 | `OPENSTINT_ZMQ` | `tcp://127.0.0.1:5556` |
 | `LAPCOUNTER_DECODER_STALE_S` | `5` (seconds without an `S` line before the decoder shows offline) |
 | `OPENSTINT_RC4_DIR` | `/var/lib/openstint` (OpenStint's `.rc4` folder; the web container needs it mounted read-write, see [learning](../docs/learning.md#permissions)) |
+| `RCRACEHQ_API_URL` | empty (RC Race HQ API base URL; empty turns Link off, see [linking](../docs/linking.md#configure)) |
+| `LAPCOUNTER_CLOUD_DIR` | `/var/lib/lapcounter/cloud` (link key + certificate) |
 
 ## Test
 

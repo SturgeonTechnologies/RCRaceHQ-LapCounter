@@ -157,6 +157,15 @@ def setdefault_setting(conn: sqlite3.Connection, key: str, value: str) -> str:
     return get_setting(conn, key)  # type: ignore[return-value]
 
 
+def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)"
+                 " ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
+
+
+def delete_setting(conn: sqlite3.Connection, key: str) -> None:
+    conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+
 # --- decoder feed ------------------------------------------------------------
 
 def insert_passing(conn: sqlite3.Connection, *, transponder: int, kind: str,

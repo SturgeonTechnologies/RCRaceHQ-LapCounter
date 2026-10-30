@@ -12,6 +12,8 @@ services:
     environment:
       LAPCOUNTER_DB: /var/lib/lapcounter/lapcounter.db
       OPENSTINT_RC4_DIR: /var/lib/openstint
+      # RC Race HQ API for Settings → Link (dev stack by default for local runs).
+      RCRACEHQ_API_URL: ${RCRACEHQ_API_URL:-https://912folhnmj.execute-api.us-west-2.amazonaws.com}
     # OpenStint's .rc4 folder (root:users 2775): Record renames files in it, so
     # the web container joins the folder's group (users = gid 100).
     group_add: ["100"]

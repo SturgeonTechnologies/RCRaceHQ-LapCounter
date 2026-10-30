@@ -16,6 +16,10 @@ class Config:
     # OpenStint's .rc4 folder (its -s directory), bind-mounted into the web
     # container. Recording a learned transponder renames a file in here.
     rc4_dir: str = "/var/lib/openstint"
+    # RC Race HQ HTTP API (the stack's ApiEndpoint output). Empty = Link is off.
+    rcracehq_api_url: str = ""
+    # Link key + certificate (0700 folder, 0600 files) on the app's data volume.
+    cloud_dir: str = "/var/lib/lapcounter/cloud"
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Config":
@@ -25,4 +29,6 @@ class Config:
             decoder_url=env.get("OPENSTINT_ZMQ", cls.decoder_url),
             decoder_stale_s=float(env.get("LAPCOUNTER_DECODER_STALE_S", cls.decoder_stale_s)),
             rc4_dir=env.get("OPENSTINT_RC4_DIR", cls.rc4_dir),
+            rcracehq_api_url=env.get("RCRACEHQ_API_URL", cls.rcracehq_api_url),
+            cloud_dir=env.get("LAPCOUNTER_CLOUD_DIR", cls.cloud_dir),
         )

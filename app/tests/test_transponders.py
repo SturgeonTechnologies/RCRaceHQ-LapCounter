@@ -133,9 +133,11 @@ def test_new_session_cancels_the_open_one_and_cancel(admin):
     assert db.current_learn_session(admin.conn) is None
 
 
-def test_events_before_the_session_are_ignored(admin, rc4):
+def test_done_before_the_session_asks_to_lift_until_reset(admin, rc4):
     feed(admin, "L 1 DONE 1000 40")
     sid = int(start(admin).headers["Location"].rsplit("/", 1)[1])
+    assert admin.get(f"/api/learn/{sid}").get_json()["state"] == "lift"
+    feed(admin, "L 3 RESET")
     assert admin.get(f"/api/learn/{sid}").get_json()["state"] == "waiting"
 
 

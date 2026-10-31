@@ -1,0 +1,20 @@
+{% macro to_learn_table(rows, show_event=False) -%}
+{% if rows %}
+<table>
+  <thead><tr>{% if show_event %}<th>Event</th>{% endif %}<th>Racer</th><th>Class</th><th>Transponder</th><th></th></tr></thead>
+  <tbody>
+  {% for e in rows %}
+    <tr>
+      {% if show_event %}<td><a href="{{ url_for('events.show', event_id=e.event_id) }}">{{ e.event_title }}</a></td>{% endif %}
+      <td>{{ e.racer_name }}</td>
+      <td>{{ e.racer_class }}</td>
+      <td>{% if e.reason == "none" %}<span class="error">none on the registration</span>{% else %}{{ e.transponder }} <span class="badge bad">not recorded on this Pi</span>{% endif %}</td>
+      <td>{% if e.learnable %}<a href="{{ url_for('transponders.index', label=e.transponder, racer_name=e.racer_name) }}#learn">Learn</a>{% else %}<a href="{{ url_for('transponders.index', racer_name=e.racer_name) }}#learn">Learn (type the number)</a>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="status ok">Every racer's transponder is recorded on this Pi.</p>
+{% endif %}
+{%- endmacro %}

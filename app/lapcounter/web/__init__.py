@@ -1,5 +1,5 @@
 """Flask web app: first-run admin setup, local login, live view, transponders,
-settings (link to RC Race HQ).
+events downloaded from RC Race HQ, settings (link to RC Race HQ).
 
     gunicorn -k gthread --threads 8 -b 0.0.0.0:8080 'lapcounter.web:create_app()'
 
@@ -43,11 +43,12 @@ def create_app(cfg: Config | None = None, *, testing: bool = False) -> Flask:
         MAX_CONTENT_LENGTH=64 * 1024,
     )
 
-    from . import auth, live, settings, transponders
+    from . import auth, events, live, settings, transponders
     app.register_blueprint(auth.bp)
     app.register_blueprint(live.bp)
     app.register_blueprint(transponders.bp)
     app.register_blueprint(settings.bp)
+    app.register_blueprint(events.bp)
 
     @app.get("/healthz", endpoint="health")
     def health():

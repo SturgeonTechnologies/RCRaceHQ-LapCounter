@@ -6,7 +6,9 @@ race day locally, and sends results and live timing back to RC Race HQ.
 supersedes design.md's *Pairing*, *Cloud side* and *Offline-first sync* sections
 where they disagree.
 
-Status: design, agreed 2026-10-29. Nothing below is built yet.
+Status: design, agreed 2026-10-29. Built so far: pairing (PR 1, 2) and the
+event download on the Pi ([event-sync.md](event-sync.md)); checkout, outbox and
+the rest are not.
 
 ## Decisions
 
@@ -76,6 +78,10 @@ one asks the manager to confirm and revokes the old one (that is also the hardwa
 replacement path).
 
 ## Event download
+
+As built, see [event-sync.md](event-sync.md): the Pi publishes over AWS IoT's
+HTTPS endpoint and polls an `index.json` instead of subscribing to a reply topic.
+The original plan:
 
 1. Pi publishes `.../events/get` (`{ "since": <iso> }`).
 2. `lapCounterEvents` Lambda finds the club's published events for the next 30 days
@@ -190,7 +196,7 @@ back from S3, so learned transponders are not lost.
 | 1 | RCRaceHQ | Lap counters table, pairing API, Manage → Lap counters page, IoT thing/policy/role alias, credentials spike | Pair from a laptop script against dev; spike result in the PR |
 | 2 | LapCounter | Pairing + Settings → Link ([linking.md](linking.md); done in `web`, syncd comes with PR 4) | Pair .197 to the dev club |
 | 3 | RCRaceHQ | Car picker at registration, `trackId` on events, `lapCounterEvents` + event pack, Cars to learn | Register on dev, pack appears in S3 |
-| 4 | LapCounter | Event download, Events page, checkout | .197 shows the dev event's heats |
+| 4 | LapCounter | Event download, Events page, transponders to learn ([event-sync.md](event-sync.md)). Checkout moves to PR 6 with the outbox | .197 shows the dev event's heats |
 | 5 | LapCounter | Race director: check-in with pad, walk-ups, run a heat, best-lap qualifying | Driveway heat with real transponders |
 | 6 | Both | Outbox + `ingestLapCounter`, results/laps in RC Race HQ | Results show on dev after a heat |
 | 7 | RCRaceHQ | Live view on the event page | Phone on the event page during a heat |

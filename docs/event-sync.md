@@ -1,0 +1,125 @@
+# Event download (RC Race HQ → lap counter)
+
+How a linked lap counter downloads its club's events: **Events → Download
+events from RC Race HQ**. This is the download half of
+[club-sync.md](club-sync.md) PR 3/4; checking an event out, running heats and
+sending results back come later.
+
+Code: [`app/lapcounter/eventsync.py`](../app/lapcounter/eventsync.py) (the
+download), [`sigv4.py`](../app/lapcounter/sigv4.py) (S3 request signing),
+[`web/events.py`](../app/lapcounter/web/events.py) (pages).
+
+## How it works
+
+```
+ Pi (web container)                         AWS
+ ──────────────────                         ───
+ 1. POST https://<iotEndpoint>:8443/topics/<topicPrefix>/events/get?qos=1
+    body {"requestId": "<uuid>"}, device cert as TLS client cert ─────► IoT rule → Lambda
+                                                                          │ writes packs/<thing>/<eventId>.json
+                                                                          │ then packs/<thing>/index.json
+ 2. GET packs/<thing>/index.json every 1.5 s (≤ 25 s)   ◄────────────────┘
+    until index.requestId == ours
+ 3. GET each pack whose sha256 changed, check the hash, store it
+ 4. Delete local events that aren't in the index any more
+```
+
+- **Who's asking** comes from AWS, not the Pi: the IoT policy only lets the
+  certificate publish under its own `rchq/<stage>/lc/<thing>/`, and the S3 keys
+  from the credentials provider can only read `packs/<thing>/`.
+- **No MQTT client and no boto3** on the Pi. Step 1 is AWS IoT's HTTPS publish;
+  S3 reads use short-lived keys from the credentials provider (the same call as
+  Settings → Check connection), cached until 5 minutes before they expire, and
+  signed with a small SigV4 implementation tested against AWS's own example.
+- The web container only needs outbound HTTPS (443 to S3 and the credentials
+  provider, **8443** to the IoT data endpoint). Nothing new in the deploy repo.
+
+## Contract
+
+**index.json** (`schema: 1`):
+
+```json
+{
+  "schema": 1,
+  "requestId": "…",
+  "generatedAt": "2026-10-31T17:00:00Z",
+  "lapCounter": { "lapCounterId": "…", "name": "…", "clubId": "…", "clubName": "…",
+                  "trackId": "…", "trackName": "…" },
+  "events": [
+    { "eventId": "…", "title": "Test Race", "dateISO": "…", "endDateISO": null,
+      "location": "…", "packKey": "packs/<thing>/<eventId>.json",
+      "packSha256": "<hex of the pack's bytes>", "entryCount": 6, "heatCount": 4 }
+  ]
+}
+```
+
+If the lap counter isn't active (unlinked, replaced), the index has
+`"error": "<message>"` and no events; the Pi shows the message and keeps what
+it already has.
+
+**Pack** (`packs/<thing>/<eventId>.json`, `schema: 1`):
+
+```json
+{
+  "schema": 1, "eventId": "…", "clubId": "…", "title": "…", "description": "…",
+  "dateISO": "…", "endDateISO": null, "location": "…", "days": ["2026-11-07"],
+  "classes": [{ "name": "2WD Buggy", "qualifyingRounds": 3, "mains": 1 }],
+  "entries": [{ "registrationId": "…", "racerUserId": null, "racerName": "…",
+                "racerClass": "2WD Buggy", "status": "paid", "transponder": "8954097",
+                "vehicle": "Associated B6 (2WD Buggy)" }],
+  "heats": [{ "heatId": "…", "className": "2WD Buggy", "roundType": "qualifier",
+              "roundNumber": 1, "dayISO": "2026-11-07", "order": 1, "entries": [] }],
+  "generatedAt": "…"
+}
+```
+
+The Pi refuses:
+- a schema other than 1 (update the lap counter app);
+- a `packKey` outside `packs/<its thing>/`, or an `eventId` that isn't
+  `[A-Za-z0-9_-]{1,64}`;
+- a pack whose sha256 doesn't match the index;
+- anything over 5 MB.
+
+Unknown fields are ignored, so the backend can add fields without breaking older Pis.
+
+RC Race HQ heats don't have racers assigned yet, so `heats[].entries` is empty;
+the event page shows each heat's class roster ("Racers in this class") instead.
+
+## On the Pi
+
+- **Events** (admin): linked club/track, last download, the Download button,
+  the downloaded events and a **Transponders to learn** list across them.
+- **Event page**: classes (rounds, mains, racer count), heats grouped by day in
+  run order, entries with a *learned / not learned* badge.
+- **Transponders to learn** (also on the Transponders page): entries with no
+  transponder on the registration, or whose number isn't recorded on this Pi
+  (not in the Known transponders list and no `<number>.rc4`). **Learn** opens
+  the Transponders page with the number and racer name filled in.
+
+Storage: SQLite tables `event_pack` (one row per event, the whole pack as JSON)
+and `event_entry` (entries, for the to-learn query). Schema version 3.
+
+## Testing on .197
+
+1. In RC Race HQ dev: a **published** event in the club .197 is linked to, with
+   classes, a few registrations and heats (Test Race).
+2. Deploy the new `sha-` tag of this app to .197.
+3. Events → **Download events from RC Race HQ**. Expect "Downloaded N events".
+4. Open the event: heats in order, entries, transponder badges. A racer whose
+   car has transponder 8954097 shows *learned*.
+5. Change something in RC Race HQ (add a registration), download again: that
+   event is "changed", the others aren't downloaded again.
+
+## Troubleshooting
+
+| Message | Meaning / fix |
+|---|---|
+| "This Pi isn't linked to RC Race HQ yet" | Settings → Link first. |
+| "AWS IoT refused the certificate" (403 on publish) | The lap counter was unlinked or replaced in RC Race HQ. Link it again. |
+| "S3 refused … (403)" on a pack | Credentials provider keys rejected, or the device role doesn't cover the key. Settings → Check connection; relink if it fails. (A 403 on `index.json` while waiting is normal: S3 reports a not-yet-written key as 403 to this role, so the Pi keeps polling.) |
+| "RC Race HQ didn't answer … within 25 s" | The request got to AWS IoT but no index came back: the IoT rule / event pack Lambda isn't deployed on that stage yet, or it failed (check its CloudWatch logs). |
+| "RC Race HQ: …" | The backend's own error (e.g. lap counter not active). |
+| "… schema N …" | The backend sends a newer format. Deploy a newer lap counter image. |
+| "didn't match its checksum" | The pack changed while downloading. Download again. |
+
+Logs: `cd /opt/lapcounter && sudo docker compose logs web | grep 'event download'`.

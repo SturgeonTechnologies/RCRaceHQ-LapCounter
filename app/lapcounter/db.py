@@ -78,6 +78,30 @@ MIGRATIONS: tuple[str, ...] = (
         source TEXT NOT NULL
     );
     """,
+    # 3: events downloaded from RC Race HQ (docs/event-sync.md). The pack is kept
+    # whole; entries are split out so "transponders to learn" is one query.
+    """
+    CREATE TABLE event_pack (
+        event_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        date_iso TEXT NOT NULL,
+        end_date_iso TEXT,
+        location TEXT,
+        sha256 TEXT NOT NULL,
+        pack_json TEXT NOT NULL,
+        downloaded_at_ms INTEGER NOT NULL
+    );
+    CREATE TABLE event_entry (
+        event_id TEXT NOT NULL REFERENCES event_pack (event_id) ON DELETE CASCADE,
+        registration_id TEXT NOT NULL,
+        racer_name TEXT NOT NULL,
+        racer_class TEXT NOT NULL,
+        status TEXT,
+        transponder TEXT,
+        vehicle TEXT,
+        PRIMARY KEY (event_id, registration_id)
+    );
+    """,
 )
 
 
@@ -321,3 +345,67 @@ def recent_passings(conn: sqlite3.Connection, *, after_id: int = 0, limit: int =
 def decoder_status(conn: sqlite3.Connection) -> dict | None:
     row = conn.execute("SELECT * FROM decoder_status WHERE id = 1").fetchone()
     return None if row is None else {k: row[k] for k in row.keys() if k != "id"}
+
+
+# --- downloaded events -------------------------------------------------------
+
+def event_hashes(conn: sqlite3.Connection) -> dict[str, str]:
+    return {r["event_id"]: r["sha256"]
+            for r in conn.execute("SELECT event_id, sha256 FROM event_pack")}
+
+
+def store_event_pack(conn: sqlite3.Connection, pack: dict, sha256: str, raw: str,
+                     at_ms: int | None = None) -> None:
+    """Replace one event (row + entries) with a freshly downloaded pack."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("DELETE FROM event_pack WHERE event_id = ?", (pack["eventId"],))
+        conn.execute(
+            "INSERT INTO event_pack (event_id, title, date_iso, end_date_iso, location, sha256,"
+            " pack_json, downloaded_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (pack["eventId"], pack.get("title") or "(untitled)", pack.get("dateISO") or "",
+             pack.get("endDateISO"), pack.get("location"), sha256, raw, at_ms or now_ms()),
+        )
+        conn.executemany(
+            "INSERT OR REPLACE INTO event_entry (event_id, registration_id, racer_name, racer_class,"
+            " status, transponder, vehicle) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(pack["eventId"], e["registrationId"], e.get("racerName") or "",
+              e.get("racerClass") or "", e.get("status"), e.get("transponder"), e.get("vehicle"))
+             for e in pack.get("entries", [])],
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def delete_events_except(conn: sqlite3.Connection, keep: set[str]) -> int:
+    gone = [r["event_id"] for r in conn.execute("SELECT event_id FROM event_pack")
+            if r["event_id"] not in keep]
+    conn.executemany("DELETE FROM event_pack WHERE event_id = ?", [(e,) for e in gone])
+    return len(gone)
+
+
+def list_events(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT p.event_id, p.title, p.date_iso, p.end_date_iso, p.location, p.downloaded_at_ms,"
+        " (SELECT COUNT(*) FROM event_entry e WHERE e.event_id = p.event_id) AS entry_count"
+        " FROM event_pack p ORDER BY p.date_iso, p.title"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_event_pack(conn: sqlite3.Connection, event_id: str) -> dict | None:
+    row = conn.execute("SELECT * FROM event_pack WHERE event_id = ?", (event_id,)).fetchone()
+    return None if row is None else dict(row)
+
+
+def list_event_entries(conn: sqlite3.Connection, event_id: str | None = None) -> list[dict]:
+    sql = ("SELECT e.*, p.title AS event_title, p.date_iso AS event_date FROM event_entry e"
+           " JOIN event_pack p ON p.event_id = e.event_id")
+    args: tuple = ()
+    if event_id is not None:
+        sql += " WHERE e.event_id = ?"
+        args = (event_id,)
+    sql += " ORDER BY p.date_iso, e.racer_class, e.racer_name"
+    return [dict(r) for r in conn.execute(sql, args).fetchall()]

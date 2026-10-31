@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% from "_to_learn.html" import to_learn_table %}
+{% block title %}{{ ev.title }}{% endblock %}
+{% block body %}
+<p><a href="{{ url_for('events.index') }}">← Events</a></p>
+<h1>{{ ev.title }}</h1>
+<p>{{ ev.date_iso[:10] }}{% if ev.end_date_iso and ev.end_date_iso[:10] != ev.date_iso[:10] %} to {{ ev.end_date_iso[:10] }}{% endif %}{% if ev.location %} · {{ ev.location }}{% endif %}
+  · downloaded <span class="ts" data-ms="{{ ev.downloaded_at_ms }}"></span></p>
+{% if pack.description %}<p class="note">{{ pack.description }}</p>{% endif %}
+
+<h2>Classes</h2>
+{% if pack.classes %}
+<table>
+  <thead><tr><th>Class</th><th>Qualifying rounds</th><th>Mains</th><th>Racers</th></tr></thead>
+  <tbody>
+  {% for c in pack.classes %}
+    <tr><td>{{ c.name }}</td><td>{{ c.qualifyingRounds }}</td><td>{{ c.mains }}</td><td>{{ by_class.get(c.name, [])|length }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No classes set on this event in RC Race HQ.</p>
+{% endif %}
+
+<h2>Heats (run order)</h2>
+{% if days %}
+  {% for day, heats in days %}
+  <h3>{{ day }}</h3>
+  <ol class="heats">
+    {% for h in heats %}
+    <li>
+      <strong>{{ h.className }} · {{ "Qualifier" if h.roundType == "qualifier" else "Main" }} {{ h.roundNumber }}</strong>
+      {% if h.entries %}
+        <span class="note">({{ h.entries|length }} on the grid)</span>
+      {% else %}
+        {% set racers = by_class.get(h.className, []) %}
+        <div class="note">Racers in this class: {% if racers %}{% for e in racers %}{{ e.racer_name }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}none registered{% endif %}</div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endfor %}
+{% else %}
+<p>No heats built in RC Race HQ yet (Manage → event → Heats).</p>
+{% endif %}
+
+<h2>Entries</h2>
+{% if entries %}
+<table>
+  <thead><tr><th>Racer</th><th>Class</th><th>Status</th><th>Transponder</th><th>Car</th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+    <tr>
+      <td>{{ e.racer_name }}</td>
+      <td>{{ e.racer_class }}</td>
+      <td>{{ e.status or "" }}</td>
+      <td>{% if e.transponder %}{{ e.transponder }} {% if e.transponder in known %}<span class="badge ok">learned</span>{% else %}<span class="badge bad">not learned</span>{% endif %}{% else %}<span class="badge bad">none</span>{% endif %}</td>
+      <td>{{ e.vehicle or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No registrations yet.</p>
+{% endif %}
+
+<h2 id="to-learn">Transponders to learn</h2>
+{{ to_learn_table(to_learn) }}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>{% endblock %}

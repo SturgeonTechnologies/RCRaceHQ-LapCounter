@@ -8,6 +8,7 @@ with PRAGMA user_version.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -101,6 +102,31 @@ MIGRATIONS: tuple[str, ...] = (
         vehicle TEXT,
         PRIMARY KEY (event_id, registration_id)
     );
+    """,
+    # 4: running heats (docs/racing.md). No foreign key to event_pack: a
+    # re-download replaces the pack and must never take results with it. The
+    # grid is copied in at start so later downloads can't change a run.
+    """
+    CREATE TABLE heat_run (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL,
+        heat_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        class_name TEXT,
+        round_type TEXT,
+        round_number INTEGER,
+        entries_json TEXT NOT NULL,
+        duration_s INTEGER NOT NULL,
+        min_lap_ms INTEGER NOT NULL,
+        state TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        go_at_ms INTEGER NOT NULL,
+        ended_at_ms INTEGER,
+        results_json TEXT
+    );
+    CREATE UNIQUE INDEX heat_run_one_active ON heat_run (state) WHERE state = 'started';
+    CREATE INDEX heat_run_heat ON heat_run (event_id, heat_id);
+    CREATE INDEX passing_heat ON passing (heat_id);
     """,
 )
 
@@ -409,3 +435,108 @@ def list_event_entries(conn: sqlite3.Connection, event_id: str | None = None) ->
         args = (event_id,)
     sql += " ORDER BY p.date_iso, e.racer_class, e.racer_name"
     return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+# --- heat runs ---------------------------------------------------------------
+
+class HeatBusy(Exception):
+    """Another heat is already counting down or running."""
+
+
+def _run_row(row: sqlite3.Row | None) -> dict | None:
+    if row is None:
+        return None
+    out = dict(row)
+    out["entries"] = json.loads(out.pop("entries_json"))
+    raw = out.pop("results_json")
+    out["results"] = None if raw is None else json.loads(raw)
+    return out
+
+
+def start_heat_run(conn: sqlite3.Connection, *, event_id: str, heat_id: str, title: str,
+                   class_name: str | None, round_type: str | None, round_number: int | None,
+                   entries: list[dict], duration_s: int, min_lap_ms: int, go_at_ms: int,
+                   at_ms: int | None = None) -> int:
+    """Create a run in its countdown. Cancels any open learn session (the loop is
+    the race's now). Raises HeatBusy if another heat is active."""
+    at = at_ms or now_ms()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM heat_run WHERE state = 'started'").fetchone():
+            raise HeatBusy("Another heat is already running. End it first.")
+        conn.execute(
+            "UPDATE learn_session SET state = 'cancelled', finished_at_ms = ? WHERE state = 'open'",
+            (at,),
+        )
+        cur = conn.execute(
+            "INSERT INTO heat_run (event_id, heat_id, title, class_name, round_type, round_number,"
+            " entries_json, duration_s, min_lap_ms, state, created_at_ms, go_at_ms)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'started', ?, ?)",
+            (event_id, heat_id, title, class_name, round_type, round_number,
+             json.dumps(entries), duration_s, min_lap_ms, at, go_at_ms),
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return int(cur.lastrowid)
+
+
+def get_heat_run(conn: sqlite3.Connection, run_id: int) -> dict | None:
+    return _run_row(conn.execute("SELECT * FROM heat_run WHERE id = ?", (run_id,)).fetchone())
+
+
+def active_heat_run(conn: sqlite3.Connection) -> dict | None:
+    return _run_row(conn.execute("SELECT * FROM heat_run WHERE state = 'started'").fetchone())
+
+
+def latest_heat_run(conn: sqlite3.Connection) -> dict | None:
+    """The active run, else the most recently ended finished one."""
+    run = active_heat_run(conn)
+    if run is not None:
+        return run
+    return _run_row(conn.execute(
+        "SELECT * FROM heat_run WHERE state = 'finished' ORDER BY ended_at_ms DESC LIMIT 1"
+    ).fetchone())
+
+
+def heat_runs_for_event(conn: sqlite3.Connection, event_id: str) -> list[dict]:
+    rows = conn.execute("SELECT * FROM heat_run WHERE event_id = ? ORDER BY id",
+                        (event_id,)).fetchall()
+    return [_run_row(r) for r in rows]  # type: ignore[misc]
+
+
+def end_heat_run(conn: sqlite3.Connection, run_id: int, state: str, *,
+                 results: list[dict] | None = None, at_ms: int | None = None) -> bool:
+    """Close an active run as finished / cancelled / aborted. False if it was
+    already closed (double click, other tab, auto-finish got there first).
+    A finished run tags its passings with the run id."""
+    at = at_ms or now_ms()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        cur = conn.execute(
+            "UPDATE heat_run SET state = ?, ended_at_ms = ?, results_json = ?"
+            " WHERE id = ? AND state = 'started'",
+            (state, at, None if results is None else json.dumps(results), run_id),
+        )
+        closed = cur.rowcount == 1
+        if closed and state == "finished":
+            conn.execute(
+                "UPDATE passing SET heat_id = ? WHERE heat_id IS NULL AND received_at_ms"
+                " BETWEEN (SELECT go_at_ms FROM heat_run WHERE id = ?) AND ?",
+                (run_id, run_id, at),
+            )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return closed
+
+
+def passings_between(conn: sqlite3.Connection, start_ms: int, end_ms: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, transponder, decoder_ts_ms, received_at_ms, rssi FROM passing"
+        " WHERE received_at_ms BETWEEN ? AND ? ORDER BY id",
+        (start_ms, end_ms),
+    ).fetchall()
+    return [dict(r) for r in rows]

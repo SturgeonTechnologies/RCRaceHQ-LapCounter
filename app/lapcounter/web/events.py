@@ -1,8 +1,7 @@
 """Admin → Events: download this club's events from RC Race HQ and look at them.
 
-The download itself is lapcounter/eventsync.py (docs/event-sync.md). Nothing
-here edits an event yet; checkout and running heats come with the race
-director PRs.
+The download itself is lapcounter/eventsync.py (docs/event-sync.md). Heats are
+started from the event page; running them is lapcounter/web/race.py.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from .. import cloud, db, eventsync
+from .. import cloud, db, eventsync, race, scoring
 from .auth import check_csrf, login_required
 
 bp = Blueprint("events", __name__)
@@ -92,7 +91,36 @@ def show(event_id: str):
         by_reg=by_reg,
         known=known,
         to_learn=eventsync.to_learn(conn, _cfg().rc4_dir, event_id),
+        runs=last_runs(conn, event_id),
+        active=db.active_heat_run(conn),
+        qualifying=qualifying(conn, event_id, pack),
+        defaults={"duration_min": race.DEFAULT_DURATION_S // 60,
+                  "min_lap_s": race.DEFAULT_MIN_LAP_MS // 1000},
+        error=request.args.get("error"),
     )
+
+
+def last_runs(conn, event_id: str) -> dict[str, dict]:
+    """heatId -> its latest run that wasn't cancelled (finished, aborted or live)."""
+    out: dict[str, dict] = {}
+    for r in db.heat_runs_for_event(conn, event_id):
+        if r["state"] != race.CANCELLED:
+            out[r["heat_id"]] = r
+    return out
+
+
+def qualifying(conn, event_id: str, pack: dict) -> list[tuple[str, list[dict]]]:
+    """[(class, ranking)] from finished qualifier heats, classes in pack order."""
+    latest: dict[str, dict] = {}  # a re-run replaces the heat's earlier results
+    for r in db.heat_runs_for_event(conn, event_id):
+        if r["state"] == race.FINISHED and r["round_type"] == "qualifier" and r["results"]:
+            latest[r["heat_id"]] = r
+    per_class: dict[str, list[list[dict]]] = defaultdict(list)
+    for r in latest.values():
+        per_class[r["class_name"] or ""].append(r["results"]["standings"])
+    order = [c.get("name") for c in pack.get("classes", [])]
+    names = [c for c in order if c in per_class] + sorted(set(per_class) - set(order))
+    return [(c, scoring.rank_qualifying(per_class[c])) for c in names]
 
 
 def heats_by_day(pack: dict) -> list[tuple[str, list[dict]]]:

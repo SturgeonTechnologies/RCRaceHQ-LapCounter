@@ -7,6 +7,8 @@
 <p>{{ ev.date_iso[:10] }}{% if ev.end_date_iso and ev.end_date_iso[:10] != ev.date_iso[:10] %} to {{ ev.end_date_iso[:10] }}{% endif %}{% if ev.location %} · {{ ev.location }}{% endif %}
   · downloaded <span class="ts" data-ms="{{ ev.downloaded_at_ms }}"></span></p>
 {% if pack.description %}<p class="note">{{ pack.description }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if active %}<p class="status ok">On track: <a href="{{ url_for('race.show', run_id=active.id) }}">{{ active.title }}</a></p>{% endif %}
 
 <h2>Classes</h2>
 {% if pack.classes %}
@@ -22,7 +24,7 @@
 <p>No classes set on this event in RC Race HQ.</p>
 {% endif %}
 
-<h2>Heats (run order)</h2>
+<h2 id="heats">Heats (run order)</h2>
 {% if days %}
   {% for day, heats in days %}
   <h3>{{ day }}</h3>
@@ -30,6 +32,22 @@
     {% for h in heats %}
     <li>
       <strong>{{ h.className }} · {{ "Qualifier" if h.roundType == "qualifier" else "Main" }} {{ h.roundNumber }}</strong>
+      {% set r = runs.get(h.heatId) %}
+      {% if r and r.state == "started" %}
+        <a class="badge ok" href="{{ url_for('race.show', run_id=r.id) }}">on track</a>
+      {% elif r and r.state == "finished" %}
+        <a class="badge ok" href="{{ url_for('race.show', run_id=r.id) }}">finished · results</a>
+      {% elif r and r.state == "aborted" %}
+        <a class="badge bad" href="{{ url_for('race.show', run_id=r.id) }}">aborted</a>
+      {% endif %}
+      {% if not active %}
+      <form method="post" action="{{ url_for('race.start', event_id=ev.event_id, heat_id=h.heatId) }}" class="start-heat"{% if r and r.state == "finished" %} data-confirm="This heat already has results. Run it again? The new results replace them."{% endif %}>
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label>Length <input type="number" name="duration_min" value="{{ defaults.duration_min }}" min="0.5" max="60" step="0.5" required> min</label>
+        <label>Min lap <input type="number" name="min_lap_s" value="{{ defaults.min_lap_s }}" min="1" max="120" step="0.5" required> s</label>
+        <button type="submit">{% if r and r.state == "finished" %}Re-run{% else %}Start{% endif %}</button>
+      </form>
+      {% endif %}
       {% if h.entries %}
         <span class="note">({{ h.entries|length }} on the grid)</span>
         <ol class="grid">
@@ -50,6 +68,25 @@
   {% endfor %}
 {% else %}
 <p>No heats built in RC Race HQ yet (Manage → event → Heats).</p>
+{% endif %}
+
+<h2 id="qualifying">Qualifying (best lap)</h2>
+{% if qualifying %}
+  {% for cls, ranking in qualifying %}
+  <h3>{{ cls }}</h3>
+  <table>
+    <thead><tr><th>#</th><th>Racer</th><th>Best lap</th><th>Heats run</th></tr></thead>
+    <tbody>
+    {% for q in ranking %}
+      <tr><td>{{ q.place }}</td><td>{{ q.racerName }}</td>
+        <td>{% if q.bestLapMs is not none %}{{ "%.3f"|format(q.bestLapMs / 1000) }} s{% else %}<span class="note">no complete lap</span>{% endif %}</td>
+        <td>{{ q.heats }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+{% else %}
+<p class="note">Shows here once a qualifier heat has finished.</p>
 {% endif %}
 
 <h2>Entries</h2>
@@ -75,4 +112,5 @@
 <h2 id="to-learn">Transponders to learn</h2>
 {{ to_learn_table(to_learn) }}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>
+<script src="{{ url_for('static', filename='confirm.js') }}"></script>{% endblock %}

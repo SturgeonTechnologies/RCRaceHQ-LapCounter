@@ -6,9 +6,9 @@ race day locally, and sends results and live timing back to RC Race HQ.
 supersedes design.md's *Pairing*, *Cloud side* and *Offline-first sync* sections
 where they disagree.
 
-Status: design, agreed 2026-10-29. Built so far: pairing (PR 1, 2) and the
-event download on the Pi ([event-sync.md](event-sync.md)); checkout, outbox and
-the rest are not.
+Status: design, agreed 2026-10-29; heat mirroring and live monitoring added
+2026-10-31. Built so far: pairing (PR 1, 2) and the event download on the Pi
+([event-sync.md](event-sync.md)); mirroring, checkout, outbox and the rest are not.
 
 ## Decisions
 
@@ -19,6 +19,9 @@ the rest are not.
 | 3 | Walk-ups | Staff can add a racer on the Pi; it syncs back as an on-site registration. The event's registration page shows a **"cars to learn"** list. |
 | 4 | Pis per track | **One per track.** A spare Pi can take over a checked-out event ([Hardware failure](#hardware-failure-takeover)). |
 | 5 | Transponder check-in | Racer drops the car on the learning pad at check-in. Swapping transponders between cars is fine; what matters is **transponder → racer for this event**. |
+| 6 | Planning from either side | Event, classes and heats can be edited in RC Race HQ **or** on the Pi and are mirrored ([Heat mirroring](#heat-mirroring)). |
+| 7 | Conflicts | **The on-site lap counter wins**, always, and especially at race time. RC Race HQ keeps the version it lost so nothing disappears silently. |
+| 8 | Race time | RC Race HQ **subscribes** to the lap counter: heat state and every crossing are monitored and **recorded** in RC Race HQ as they happen, not just at the end ([Live monitoring](#live-monitoring-and-recording)). |
 
 ## Overview
 
@@ -110,6 +113,65 @@ The original plan:
 Before checkout, re-downloading replaces the Pi's copy. After checkout, the Pi's copy
 is the truth.
 
+## Heat mirroring
+
+Before race day, a club can plan the event from either side. Both sides hold a copy
+of the event, its classes and its heats (including **which racers are in each
+heat**), and every edit is copied to the other side within seconds when online.
+
+**What is mirrored:** event (name, days, track), classes (qualifying rounds, mains,
+racers per heat), heats (class, round, day, run order, racers and grid).
+Registrations stay owned by RC Race HQ; walk-ups come from the Pi.
+
+**Directions:**
+- **RC Race HQ → Pi:** after any change to an event that a linked lap counter
+  covers, the backend publishes `rchq/<stage>/lc/<thing>/events/changed`
+  (`{eventId, version}`). The Pi re-downloads that pack. This needs the Pi to keep
+  an MQTT connection open (today it connects, publishes once and disconnects).
+- **Pi → RC Race HQ:** every local edit is an outbox record (`event.upsert`,
+  `heat.upsert`, `heat.delete`) applied by `ingestLapCounter`. Events created on
+  the Pi get a ULID on the Pi and appear in RC Race HQ like any other event.
+
+**Conflicts: the lap counter wins.** Each mirrored record carries `version` and
+`updatedBy` (`web` or `lapcounter`).
+- A Pi edit is always applied, even if the web copy changed since the Pi last saw
+  it. The web copy it replaces is saved to the record's `history` and Manage shows
+  *"Heat 3 was changed on the lap counter; your edit was replaced"* with a
+  **View previous** link.
+- A web edit to a record the Pi has changed but not yet synced is applied in the
+  cloud, then overwritten when the Pi's record arrives (same notice).
+- After checkout (below) web edits to heats are blocked entirely, so at race time
+  there is nothing to conflict.
+
+**Heat fill.** Both sides get a racer picker and **Auto-fill from registrations**.
+The fill rule (per class, `racersPerHeat`, round 1 in registration order, later
+rounds re-seeded from qualifying) is written once in TypeScript and once in Python
+with a shared JSON test-case file, so both sides build the same heats.
+
+## Live monitoring and recording
+
+At race time RC Race HQ follows the lap counter and **records** what happens, so
+the cloud has the race as it runs, not only the final results.
+
+- **Presence:** the Pi stays connected to AWS IoT. IoT lifecycle events
+  (`$aws/events/presence/connected|disconnected/<thing>`) update `lastSeenAt` and
+  `online` on the lap counter row; Manage → Lap counters and the event page show
+  *Online / Offline since 14:02*.
+- **Heat state** (`heat.state`, outbox, stored): `staged → running → finished`
+  (or `aborted`), with start time, duration and the heat's racers and transponders.
+- **Crossings** (`heat.lap`, outbox, stored): one record per crossing
+  (`heatId, transponder, registrationId, tsMs, lapMs, lapNo`). Stored in the `laps`
+  table as they arrive, ordered by the outbox `seq`.
+- **Final result** (`heat.result`, outbox, stored): the Pi's computed standings,
+  which are authoritative and replace anything the cloud derived from the laps.
+- **Fan-out:** `ingestLapCounter` republishes each state change and crossing to
+  `live/<eventId>` for spectators. The live view reads from the stored records on
+  page load, then follows the topic, so a late joiner sees the whole heat so far.
+
+If the Pi loses internet mid-heat, the race keeps running locally; the outbox
+replays the crossings in order when it reconnects and RC Race HQ fills in the gap
+(the live view shows *Lap counter offline, catching up*).
+
 ## Checkout, local race management, check-in
 
 - **Checkout:** the admin picks the event on the Pi → outbox record
@@ -126,15 +188,17 @@ is the truth.
 | type | payload | backend effect |
 |---|---|---|
 | `event.checkout` / `event.finish` | `{}` | set / clear `checkedOutBy` |
-| `heat.upsert` | heat incl. entries | upsert heat (Pi-made heats get a ULID on the Pi) |
+| `event.upsert` | event + classes | create/update event (Pi-made events get a ULID on the Pi); Pi wins |
+| `heat.upsert` | heat incl. entries | upsert heat (Pi-made heats get a ULID on the Pi); Pi wins, replaced web copy goes to `history` |
 | `heat.delete` | `{heatId}` | delete heat |
 | `entry.walkup` | racer name, class, optional userId, transponder | registration `status: "onsite"`, `source: "lapcounter"`, `amountCents` 0 |
 | `entry.transponder` | `{registrationId, transponder}` | set the registration's transponder for this event |
-| `heat.live` | heat state snapshot | republish to `live/<eventId>` only (not stored) |
-| `heat.result` | laps + results | write laps, fill `HeatRow.results` |
+| `heat.state` | `{heatId, state, startedAt, durationS, entries}` | store on the heat, republish to `live/<eventId>` |
+| `heat.lap` | one crossing | write to `laps`, republish to `live/<eventId>` |
+| `heat.result` | final standings | fill `HeatRow.results` (authoritative) |
 
-All idempotent on the record `uuid`. `heat.live` is best-effort: dropped if older
-than 10 s when the Pi is back online.
+All idempotent on the record `uuid` and applied in `seq` order. Nothing is
+live-only: everything the live view shows is also stored.
 
 ## Scoring
 
@@ -202,7 +266,23 @@ back from S3, so learned transponders are not lost.
 | 7 | RCRaceHQ | Live view on the event page | Phone on the event page during a heat |
 | 8 | Both | Takeover + Recovery page | Unplug .197 mid-event, take over with a second Pi |
 
+Heat mirroring and live monitoring slot in after PR 4 (done) and reshape 5–7:
+
+| # | Repo | Scope | How we test it |
+|---|---|---|---|
+| M1 | RCRaceHQ | Racers on heats, picker, auto-fill, `version`/`updatedBy`/`history` | Fill Test Race's heats on the web; Pi download shows the right racers per heat |
+| M2 | Both | Persistent MQTT on the Pi, `events/changed` push, presence (online/offline) | Move a heat on the web, .197 updates by itself; unplug .197, Manage shows Offline |
+| M3 | Both | Outbox + `ingestLapCounter` (`event.upsert`, `heat.upsert/delete`), heat editing and event creation on the Pi | Reorder a heat on the Pi, see it on the web; clash an offline Pi edit with a web edit, Pi wins and the notice shows |
+| M4 | Both | Checkout lock, `heat.state` / `heat.lap` / `heat.result` recorded in RC Race HQ | Driveway heat on .197; laps appear on dev as they happen |
+| M5 | RCRaceHQ | Live view on the event page (replaces PR 7) | Phone on the event page during a heat |
+
 ## Still open
+
+Defaults below are what gets built unless changed:
+
+- Pi-created events: **draft** in RC Race HQ until a manager publishes them.
+- Auto-fill: **8** racers per heat; round 1 in **registration order**.
+- Mains: **auto-filled** from qualifying (top N to the A-main), editable by hand.
 
 - Payment for walk-ups (`onsite` registrations are unpaid; collect cash, or a Stripe
   link later).

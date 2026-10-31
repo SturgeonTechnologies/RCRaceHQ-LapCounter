@@ -32,6 +32,14 @@
       <strong>{{ h.className }} · {{ "Qualifier" if h.roundType == "qualifier" else "Main" }} {{ h.roundNumber }}</strong>
       {% if h.entries %}
         <span class="note">({{ h.entries|length }} on the grid)</span>
+        <ol class="grid">
+        {% for g in h.entries|sort(attribute="grid") %}
+          {% set e = by_reg.get(g.registrationId) %}
+          <li>{% if e %}{{ e.racer_name }}
+            {% if e.transponder %}<span class="note">{{ e.transponder }}</span> {% if e.transponder in known %}<span class="badge ok">learned</span>{% else %}<span class="badge bad">not learned</span>{% endif %}{% else %}<span class="badge bad">no transponder</span>{% endif %}
+          {% else %}<span class="note">(registration {{ g.registrationId }} isn't in this download)</span>{% endif %}</li>
+        {% endfor %}
+        </ol>
       {% else %}
         {% set racers = by_class.get(h.className, []) %}
         <div class="note">Racers in this class: {% if racers %}{% for e in racers %}{{ e.racer_name }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}none registered{% endif %}</div>

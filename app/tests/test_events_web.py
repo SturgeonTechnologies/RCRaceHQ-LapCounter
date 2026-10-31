@@ -71,6 +71,22 @@ def test_download_and_show(tmp_path):
     assert client.get("/events/nope").status_code == 404
 
 
+def test_heat_shows_its_picked_racers_in_grid_order(tmp_path):
+    def sync(conn, link):
+        p = pack()
+        p["heats"][0]["entries"] = [{"registrationId": "r3", "grid": 1}, {"registrationId": "r1", "grid": 2}]
+        store(conn, p)
+        return eventsync.Result(1, 1, 0, {})
+    client = make(tmp_path, sync=sync)
+    client.post("/events/download", data={"csrf": csrf_of(client)})
+    page = client.get("/events/ev1").data.decode()
+    assert "(2 on the grid)" in page and "Racers in this class" not in page
+    heat = page[page.index('<ol class="grid">'):]
+    heat = heat[:heat.index("</ol>")]
+    assert heat.index("Sam") < heat.index("Riley") and "Kid" not in heat
+    assert "7340166" in heat
+
+
 def test_download_error_is_shown(tmp_path):
     def boom(conn, link):
         raise cloud.CloudError("RC Race HQ didn't answer the download request within 25 s.")

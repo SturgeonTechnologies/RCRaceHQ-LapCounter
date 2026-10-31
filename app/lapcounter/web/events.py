@@ -81,6 +81,7 @@ def show(event_id: str):
     by_class: dict[str, list[dict]] = defaultdict(list)
     for e in entries:
         by_class[e["racer_class"]].append(e)
+    by_reg = {e["registration_id"]: e for e in entries}
     return render_template(
         "event.html",
         ev=row,
@@ -88,6 +89,7 @@ def show(event_id: str):
         days=heats_by_day(pack),
         entries=entries,
         by_class=by_class,
+        by_reg=by_reg,
         known=known,
         to_learn=eventsync.to_learn(conn, _cfg().rc4_dir, event_id),
     )

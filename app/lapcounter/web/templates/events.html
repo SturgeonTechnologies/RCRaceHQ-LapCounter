@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_to_learn.html" import to_learn_table %}
+{% from "_to_learn.html" import missing_summary %}
 {% block title %}Events{% endblock %}
 {% block body %}
 <h1>Events</h1>
@@ -25,13 +25,13 @@
 <h2>Downloaded events</h2>
 {% if events %}
 <table>
-  <thead><tr><th>Date</th><th>Event</th><th>Entries</th><th>Location</th></tr></thead>
+  <thead><tr><th>Date</th><th>Event</th><th>Racers</th><th>Location</th></tr></thead>
   <tbody>
   {% for e in events %}
     <tr>
       <td>{{ e.date_iso[:10] }}</td>
       <td><a href="{{ url_for('events.show', event_id=e.event_id) }}">{{ e.title }}</a></td>
-      <td>{{ e.entry_count }}</td>
+      <td>{{ missing_summary(counts.get(e.event_id, {"racers": 0, "missing": 0})) }}</td>
       <td>{{ e.location or "" }}</td>
     </tr>
   {% endfor %}
@@ -41,9 +41,5 @@
 <p>None yet.</p>
 {% endif %}
 
-{% if events %}
-<h2 id="to-learn">Transponders to learn</h2>
-{{ to_learn_table(to_learn, show_event=True) }}
-{% endif %}
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_to_learn.html" import to_learn_table %}
+{% from "_to_learn.html" import to_learn_groups with context %}
 {% block title %}Transponders{% endblock %}
 {% macro delete_button(number) -%}
 <form method="post" action="{{ url_for('transponders.delete', number=number) }}" class="inline"
@@ -11,6 +11,7 @@
 {% block body %}
 <h1>Transponders</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if notice %}<p class="status ok" role="status">{{ notice }}</p>{% endif %}
 {% if deleted %}<p class="status ok" role="status">Deleted {{ deleted }}. It can be learned again.</p>{% endif %}
 
 <h2 id="learn">Learn a transponder</h2>
@@ -38,10 +39,11 @@ send their own number and just get added to the list.</p>
 {% endif %}
 
 {% if has_events %}
-<h2 id="to-learn">Transponders to learn</h2>
-<p class="note">Racers in the downloaded <a href="{{ url_for('events.index') }}">events</a> whose
-  transponder isn't recorded on this Pi yet.</p>
-{{ to_learn_table(to_learn, show_event=True) }}
+<h2 id="to-learn">Transponders we don't know yet</h2>
+<p class="note">Racers in the downloaded <a href="{{ url_for('events.index') }}">events</a> with no
+  transponder on their registration, or one that isn't recorded on this Pi.
+  <strong>Learn</strong> fills in the form above.</p>
+{{ to_learn_groups(to_learn) }}
 {% endif %}
 
 <h2>Known transponders</h2>

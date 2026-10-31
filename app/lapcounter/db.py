@@ -128,6 +128,22 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX heat_run_heat ON heat_run (event_id, heat_id);
     CREATE INDEX passing_heat ON passing (heat_id);
     """,
+    # 5: "notify racers we're missing their transponder" requests. Texting comes
+    # later (RC Race HQ sends it); until then sent_at_ms stays NULL. No foreign
+    # key: a re-download replaces the event's entries but keeps the history.
+    """
+    CREATE TABLE transponder_notice (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL,
+        registration_id TEXT NOT NULL,
+        racer_name TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        transponder TEXT,
+        requested_at_ms INTEGER NOT NULL,
+        sent_at_ms INTEGER
+    );
+    CREATE INDEX transponder_notice_entry ON transponder_notice (event_id, registration_id);
+    """,
 )
 
 
@@ -435,6 +451,36 @@ def list_event_entries(conn: sqlite3.Connection, event_id: str | None = None) ->
         args = (event_id,)
     sql += " ORDER BY p.date_iso, e.racer_class, e.racer_name"
     return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+# --- missing-transponder notices ---------------------------------------------
+
+def queue_transponder_notices(conn: sqlite3.Connection, event_id: str, rows: list[dict],
+                              at_ms: int | None = None) -> int:
+    """Record a notify request for each to-learn row; returns how many."""
+    at = at_ms or now_ms()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.executemany(
+            "INSERT INTO transponder_notice (event_id, registration_id, racer_name, reason,"
+            " transponder, requested_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+            [(event_id, r["registration_id"], r["racer_name"], r["reason"],
+              r["transponder"], at) for r in rows],
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return len(rows)
+
+
+def last_transponder_notices(conn: sqlite3.Connection) -> dict[tuple[str, str], int]:
+    """(event_id, registration_id) -> when a notice was last requested."""
+    rows = conn.execute(
+        "SELECT event_id, registration_id, MAX(requested_at_ms) AS at_ms"
+        " FROM transponder_notice GROUP BY event_id, registration_id"
+    ).fetchall()
+    return {(r["event_id"], r["registration_id"]): r["at_ms"] for r in rows}
 
 
 # --- heat runs ---------------------------------------------------------------

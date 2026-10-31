@@ -116,3 +116,17 @@ to the folder.
   isn't blocked yet.
 - Spoken "…, learned" announcement (`announcerd`).
 - Uploading `.rc4` files to RC Race HQ (`syncd`).
+
+## Missing transponders
+
+The Transponders page lists every racer in the downloaded events whose
+transponder this Pi doesn't know yet (none on the registration, or a number
+that isn't recorded), grouped by event. The Events list and each event page
+show the count and link here.
+
+**Notify racers we are missing their transponder for the race** records one
+request per racer still on that event's list, in the `transponder_notice` table,
+and marks each row *notify requested* with the time. **No text is sent yet.**
+Sending goes through RC Race HQ (which has the racers' phone numbers and SMS
+opt-in) once the outbox syncs to it; `sent_at_ms` stays empty until then.
+Pressing it again records another request.

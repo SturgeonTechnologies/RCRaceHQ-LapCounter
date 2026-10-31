@@ -42,7 +42,7 @@ def index():
         link=cloud.current_link(conn),
         last=eventsync.last_sync(conn),
         events=db.list_events(conn),
-        to_learn=eventsync.to_learn(conn, _cfg().rc4_dir),
+        counts=eventsync.racer_counts(conn, _cfg().rc4_dir),
         error=request.args.get("error"),
         notice=request.args.get("notice"),
     )
@@ -86,11 +86,11 @@ def show(event_id: str):
         ev=row,
         pack=pack,
         days=heats_by_day(pack),
-        entries=entries,
         by_class=by_class,
         by_reg=by_reg,
         known=known,
-        to_learn=eventsync.to_learn(conn, _cfg().rc4_dir, event_id),
+        counts=eventsync.racer_counts(conn, _cfg().rc4_dir, event_id).get(
+            event_id, {"racers": 0, "missing": 0, "classes": {}}),
         runs=last_runs(conn, event_id),
         active=db.active_heat_run(conn),
         qualifying=qualifying(conn, event_id, pack),

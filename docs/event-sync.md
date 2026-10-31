@@ -92,17 +92,23 @@ the event page shows each heat's class roster ("Racers in this class") instead.
 
 ## On the Pi
 
-- **Events** (admin): linked club/track, last download, the Download button,
-  the downloaded events and a **Transponders to learn** list across them.
-- **Event page**: classes (rounds, mains, racer count), heats grouped by day in
-  run order, entries with a *learned / not learned* badge.
-- **Transponders to learn** (also on the Transponders page): entries with no
-  transponder on the registration, or whose number isn't recorded on this Pi
-  (not in the Known transponders list and no `<number>.rc4`). **Learn** opens
-  the Transponders page with the number and racer name filled in.
+- **Events** (admin): linked club/track, last download, the Download button and
+  the downloaded events. Each event shows its racer count and how many
+  transponders are missing, linking to the Transponders page.
+- **Event page**: a **Racers** summary ("12 racers · 3 missing transponders",
+  linking to the Transponders page), classes (rounds, mains, racers, missing per
+  class) and heats grouped by day in run order with *learned / not learned*
+  badges on each grid.
+- **Transponders page → Transponders we don't know yet**: every racer across the
+  downloaded events with no transponder on the registration, or whose number
+  isn't recorded on this Pi (not in Known transponders and no `<number>.rc4`),
+  grouped by event. **Learn** fills in the form with the number and racer name.
+  Each event has a **Notify racers we are missing their transponder for the
+  race** button ([learning.md](learning.md#missing-transponders)).
 
 Storage: SQLite tables `event_pack` (one row per event, the whole pack as JSON)
-and `event_entry` (entries, for the to-learn query). Schema version 3.
+and `event_entry` (entries, for the to-learn query). Schema version 3
+(5 with notify requests, `transponder_notice`).
 
 ## Testing on .197
 

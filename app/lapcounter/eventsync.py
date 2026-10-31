@@ -1,7 +1,7 @@
 """Download this club's events from RC Race HQ (docs/event-sync.md).
 
 1. `request_events` publishes `{"requestId"}` to `<topicPrefix>/events/get` over
-   AWS IoT's HTTPS endpoint (port 8443, the device certificate as client cert).
+   MQTT (port 8883, client ID = thing name, the device certificate as client cert).
 2. RC Race HQ writes one pack per event to `packs/<thing>/<eventId>.json` in the
    lap counter bucket, then `packs/<thing>/index.json` carrying our requestId.
 3. `sync_events` polls the index until it carries our requestId, downloads the
@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import socket
 import ssl
 import time
 import urllib.error
@@ -27,7 +28,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
-from urllib.parse import quote
 
 from . import cloud, db, sigv4
 from .cloud import CloudError
@@ -42,39 +42,103 @@ HTTP_TIMEOUT_S = 10.0
 EVENT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
-# --- publish (HTTPS to AWS IoT with the device certificate) -------------------
+# --- publish (MQTT over TLS with the device certificate) ---------------------
+#
+# The IoT policy scopes topics with ${iot:Connection.Thing.ThingName}, which AWS
+# only resolves for MQTT connections whose client ID is the thing name. HTTPS
+# publishes (port 8443) have no client ID, so AWS refused them with 403. This is
+# the smallest MQTT 3.1.1 client that does CONNECT -> PUBLISH QoS 1 -> PUBACK.
 
-Publish = Callable[[str, bytes, ssl.SSLContext], int]
+MQTT_PORT = 8883
+
+Publish = Callable[[str, str, str, bytes, ssl.SSLContext], None]
 
 
-def https_publish(url: str, body: bytes, context: ssl.SSLContext) -> int:
-    req = urllib.request.Request(url, data=body, method="POST",
-                                 headers={"Content-Type": "application/json"})
+def _remaining_length(n: int) -> bytes:
+    out = bytearray()
+    while True:
+        byte, n = n % 128, n // 128
+        out.append(byte | (0x80 if n else 0))
+        if not n:
+            return bytes(out)
+
+
+def _string(value: str) -> bytes:
+    raw = value.encode()
+    return len(raw).to_bytes(2, "big") + raw
+
+
+def _packet(header: int, body: bytes) -> bytes:
+    return bytes([header]) + _remaining_length(len(body)) + body
+
+
+def connect_packet(client_id: str, keepalive: int = 30) -> bytes:
+    # Protocol "MQTT" level 4 (3.1.1), clean session, no will/user/password.
+    return _packet(0x10, _string("MQTT") + bytes([4, 0x02]) + keepalive.to_bytes(2, "big")
+                   + _string(client_id))
+
+
+def publish_packet(topic: str, payload: bytes, packet_id: int = 1) -> bytes:
+    return _packet(0x32, _string(topic) + packet_id.to_bytes(2, "big") + payload)  # QoS 1
+
+
+def _read_exact(sock, n: int) -> bytes:
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionResetError("closed by AWS IoT")
+        buf += chunk
+    return buf
+
+
+REFUSED = ("AWS IoT refused the certificate. It was probably unlinked in "
+           "RC Race HQ; link this Pi again under Settings.")
+
+
+def mqtt_exchange(sock, client_id: str, topic: str, payload: bytes) -> None:
+    """CONNECT, PUBLISH (QoS 1), wait for PUBACK, DISCONNECT on an open stream.
+
+    AWS IoT answers an unauthorized CONNECT or PUBLISH by closing the
+    connection, so a reset at either step means the certificate was refused.
+    """
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S, context=context) as resp:
-            return resp.status
-    except urllib.error.HTTPError as exc:
-        return exc.code
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise CloudError(f"Can't reach AWS IoT ({getattr(exc, 'reason', exc)}). "
-                         "Check the Pi's internet.") from exc
+        sock.sendall(connect_packet(client_id))
+        connack = _read_exact(sock, 4)
+        if connack[0] != 0x20 or connack[3] != 0:
+            raise CloudError(REFUSED if connack[3] in (4, 5) else
+                             f"AWS IoT refused the connection (CONNACK {connack[3]}).")
+        sock.sendall(publish_packet(topic, payload))
+        puback = _read_exact(sock, 4)
+        if puback[0] != 0x40 or puback[2:4] != b"\x00\x01":
+            raise CloudError(f"AWS IoT sent an unexpected reply ({puback.hex()}).")
+        sock.sendall(b"\xe0\x00")
+    except (ConnectionResetError, BrokenPipeError, ssl.SSLEOFError) as exc:
+        raise CloudError(REFUSED) from exc
+
+
+def mqtt_publish(host: str, client_id: str, topic: str, payload: bytes,
+                 context: ssl.SSLContext) -> None:
+    try:
+        with socket.create_connection((host, MQTT_PORT), timeout=HTTP_TIMEOUT_S) as raw:
+            with context.wrap_socket(raw, server_hostname=host) as sock:
+                mqtt_exchange(sock, client_id, topic, payload)
+    except CloudError:
+        raise
+    except ssl.SSLError as exc:
+        raise CloudError(REFUSED) from exc
+    except (TimeoutError, OSError) as exc:
+        raise CloudError(f"Can't reach AWS IoT ({exc}). Check the Pi's internet.") from exc
 
 
 def request_events(link: dict, paths: cloud.Paths, request_id: str,
-                   publish: Publish = https_publish) -> None:
+                   publish: Publish = mqtt_publish) -> None:
     if not (paths.key.exists() and paths.cert.exists()):
         raise CloudError("The key or certificate is missing on this Pi. Link it again.")
     context = ssl.create_default_context()
     context.load_cert_chain(certfile=str(paths.cert), keyfile=str(paths.key))
-    topic = quote(f"{link['topicPrefix']}/events/get", safe="/")
-    url = f"https://{link['iotEndpoint']}:8443/topics/{topic}?qos=1"
-    status = publish(url, json.dumps({"requestId": request_id}).encode(), context)
-    if status == 200:
-        return
-    if status in (401, 403):
-        raise CloudError("AWS IoT refused the certificate. It was probably unlinked in "
-                         "RC Race HQ; link this Pi again under Settings.")
-    raise CloudError(f"AWS IoT answered HTTP {status} to the download request.")
+    publish(link["iotEndpoint"], link["thingName"], f"{link['topicPrefix']}/events/get",
+            json.dumps({"requestId": request_id}).encode(), context)
 
 
 # --- S3 (GET only, SigV4 with credentials-provider keys) ----------------------
@@ -204,7 +268,7 @@ class Result:
 
 
 def sync_events(conn, link: dict, paths: cloud.Paths, *, s3: S3 | None = None,
-                publish: Publish = https_publish, sleep: Callable[[float], None] = time.sleep,
+                publish: Publish = mqtt_publish, sleep: Callable[[float], None] = time.sleep,
                 clock: Callable[[], float] = time.monotonic,
                 request_id: str | None = None) -> Result:
     thing = link["thingName"]

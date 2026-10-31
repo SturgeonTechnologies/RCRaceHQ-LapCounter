@@ -79,8 +79,8 @@ replacement path).
 
 ## Event download
 
-As built, see [event-sync.md](event-sync.md): the Pi publishes over AWS IoT's
-HTTPS endpoint and polls an `index.json` instead of subscribing to a reply topic.
+As built, see [event-sync.md](event-sync.md): the Pi publishes one MQTT
+message (no persistent connection) and polls an `index.json` instead of subscribing to a reply topic.
 The original plan:
 
 1. Pi publishes `.../events/get` (`{ "since": <iso> }`).

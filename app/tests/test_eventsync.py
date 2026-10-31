@@ -94,9 +94,8 @@ def run(conn, paths, s3, *, publish=None, clock=None):
     clock = clock or Clock()
     calls = []
 
-    def pub(url, body, context):
-        calls.append((url, json.loads(body)))
-        return 200
+    def pub(host, client_id, topic, body, context):
+        calls.append((host, client_id, topic, json.loads(body)))
     result = eventsync.sync_events(conn, LINK, paths, s3=s3, publish=publish or pub,
                                    sleep=clock.sleep, clock=clock, request_id="req1")
     return result, calls
@@ -105,7 +104,7 @@ def run(conn, paths, s3, *, publish=None, clock=None):
 def test_publish_url_and_body(conn, paths):
     packs = {f"packs/{THING}/ev1.json": raw(pack())}
     _, calls = run(conn, paths, FakeS3([index_for("req1", packs)], packs))
-    assert calls == [(f"https://{LINK['iotEndpoint']}:8443/topics/rchq/dev/lc/{THING}/events/get?qos=1",
+    assert calls == [(LINK["iotEndpoint"], THING, f"rchq/dev/lc/{THING}/events/get",
                       {"requestId": "req1"})]
 
 
@@ -177,9 +176,51 @@ def test_pack_key_must_be_own_folder(conn, paths):
         run(conn, paths, FakeS3([index_for("req1", packs)], packs))
 
 
-def test_publish_403_says_relink(conn, paths):
+def test_publish_refused_says_relink(conn, paths):
+    def refused(*a):
+        raise CloudError(eventsync.REFUSED)
     with pytest.raises(CloudError, match="link this Pi again"):
-        run(conn, paths, FakeS3([None], {}), publish=lambda *a: 403)
+        run(conn, paths, FakeS3([None], {}), publish=refused)
+
+
+class FakeBroker:
+    """One end of a socketpair answering like AWS IoT."""
+
+    def __init__(self, replies):
+        self.sent, self.replies = b"", list(replies)
+
+    def sendall(self, data):
+        self.sent += data
+        self._buf = self.replies.pop(0) if self.replies else b""
+
+    def recv(self, n):
+        out, self._buf = self._buf[:n], self._buf[n:]
+        return out
+
+
+def test_mqtt_packets():
+    assert eventsync.connect_packet("lc-dev-x") == (
+        b"\x10\x14\x00\x04MQTT\x04\x02\x00\x1e\x00\x08lc-dev-x")
+    pkt = eventsync.publish_packet("a/b", b"{}")
+    assert pkt == b"\x32\x09\x00\x03a/b\x00\x01{}"
+    assert eventsync._remaining_length(321) == b"\xc1\x02"
+
+
+def test_mqtt_exchange_ok():
+    broker = FakeBroker([b"\x20\x02\x00\x00", b"\x40\x02\x00\x01", b""])
+    eventsync.mqtt_exchange(broker, THING, "t/x", b"{}")
+    assert broker.sent.startswith(eventsync.connect_packet(THING))
+    assert broker.sent.endswith(eventsync.publish_packet("t/x", b"{}") + b"\xe0\x00")
+
+
+@pytest.mark.parametrize("replies", [
+    [b""],                                  # closed on CONNECT
+    [b"\x20\x02\x00\x05"],                 # CONNACK not authorized
+    [b"\x20\x02\x00\x00", b""],            # closed on PUBLISH (topic not allowed)
+])
+def test_mqtt_exchange_refused(replies):
+    with pytest.raises(CloudError, match="link this Pi again"):
+        eventsync.mqtt_exchange(FakeBroker(replies), THING, "t/x", b"{}")
 
 
 def test_s3_signs_and_caches_creds():

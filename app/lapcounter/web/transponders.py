@@ -96,6 +96,10 @@ def start():
         name = learning.validate_name(request.form.get("racer_name", ""))
     except learning.LearnError as exc:
         return redirect(url_for("transponders.index", error=str(exc)))
+    if db.active_heat_run(conn) is not None:
+        return redirect(url_for(
+            "transponders.index",
+            error="A heat is on track. Learn between heats, once it has finished."))
     if label in learning.learned_numbers(_cfg().rc4_dir):
         return redirect(url_for(
             "transponders.index",

@@ -11,6 +11,7 @@ holds the services and web UI around it, and the hardware.
 | [`docs/design.md`](docs/design.md) | Architecture and build order |
 | [`docs/club-sync.md`](docs/club-sync.md) | Club sync with RC Race HQ: pairing, event download, check-in, scoring, takeover |
 | [`docs/linking.md`](docs/linking.md) | Linking a Pi to a club's track in RC Race HQ (Settings → Link) |
+| [`docs/racing.md`](docs/racing.md) | Running a heat: start, countdown, laps, finish, results, qualifying |
 | [`docs/event-sync.md`](docs/event-sync.md) | Downloading the club's events (Events page), the event pack format, transponders to learn |
 | [`docs/build.md`](docs/build.md) | Building the image, CI → GHCR (native arm64), releases |
 | [`hardware/burst-detector-hat/`](hardware/burst-detector-hat) | Burst-detector HAT for the Pi (KiCad, fab files) |

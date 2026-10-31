@@ -8,11 +8,12 @@ lapd + SQLite + live page + local admin (step 1), transponder learning
 
 | Service | Command | What it does now |
 |---|---|---|
-| `web` | `gunicorn … 'lapcounter.web:create_app()'` | First-run admin setup, admin sign-in, public live view (SSE), Admin → Transponders (learn + record), Settings → Link to RC Race HQ |
+| `web` | `gunicorn … 'lapcounter.web:create_app()'` | First-run admin setup, admin sign-in, public live view (SSE + current heat), Admin → Transponders (learn + record), Events (download, start / end heats, qualifying), Settings → Link to RC Race HQ |
 | `lapd` | `python -m lapcounter.lapd` | Subscribes to OpenStint's ZeroMQ feed (`:5556`), stores passings, decoder stats and every learning (`L`) line in SQLite |
 
-Both share `/var/lib/lapcounter/lapcounter.db` (WAL). Not built yet: heats and
-laps, lineup builder, the learning pad's RF relay, syncd, announcer, captive-portal grants
+Both share `/var/lib/lapcounter/lapcounter.db` (WAL). Heats are scored by `web`
+from lapd's raw passings ([../docs/racing.md](../docs/racing.md)). Not built yet:
+lineup editing on the Pi, results upload to RC Race HQ (outbox), the learning pad's RF relay, syncd, announcer, captive-portal grants
 (the placeholder `race-portal` from `race_hotspot` still owns port 80).
 
 ## Run
@@ -30,7 +31,7 @@ LAPCOUNTER_DB=./dev.db flask --app 'lapcounter.web:create_app()' run -p 8080
 ```
 
 Open `http://<pi>:8080/`. The first visit goes to **Set up the lap counter**.
-Transponders are at `/transponders` and the RC Race HQ link at `/settings`
+Transponders are at `/transponders`, events and heats at `/events` and the RC Race HQ link at `/settings`
 once you're signed in.
 
 ## Environment

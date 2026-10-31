@@ -116,7 +116,7 @@ and `event_entry` (entries, for the to-learn query). Schema version 3.
 |---|---|
 | "This Pi isn't linked to RC Race HQ yet" | Settings → Link first. |
 | "AWS IoT refused the certificate" (403 on publish) | The lap counter was unlinked or replaced in RC Race HQ. Link it again. |
-| "S3 refused … (403)" | Credentials provider keys rejected, or the bucket policy doesn't cover the key. Settings → Check connection; relink if it fails. |
+| "S3 refused … (403)" on a pack | Credentials provider keys rejected, or the device role doesn't cover the key. Settings → Check connection; relink if it fails. (A 403 on `index.json` while waiting is normal: S3 reports a not-yet-written key as 403 to this role, so the Pi keeps polling.) |
 | "RC Race HQ didn't answer … within 25 s" | The request got to AWS IoT but no index came back: the IoT rule / event pack Lambda isn't deployed on that stage yet, or it failed (check its CloudWatch logs). |
 | "RC Race HQ: …" | The backend's own error (e.g. lap counter not active). |
 | "… schema N …" | The backend sends a newer format. Deploy a newer lap counter image. |

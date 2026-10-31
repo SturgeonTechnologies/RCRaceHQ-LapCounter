@@ -113,8 +113,8 @@ class S3:
             self._cached, self._expires = creds, _epoch(creds.get("expiration"), self._clock())
         return self._cached
 
-    def get(self, key: str) -> bytes | None:
-        """Object bytes, or None if it doesn't exist (yet)."""
+    def get(self, key: str, *, absent: tuple[int, ...] = (404,)) -> bytes | None:
+        """Object bytes, or None if S3 answered one of `absent` (it doesn't exist yet)."""
         keys = self._keys()
         host = f"{self.bucket}.s3.{self.region}.amazonaws.com"
         path = sigv4.canonical_path(key)
@@ -130,7 +130,7 @@ class S3:
             if len(body) > MAX_OBJECT_BYTES:
                 raise CloudError(f"{key} is larger than {MAX_OBJECT_BYTES // 1024} KB; refusing it.")
             return body
-        if status == 404:
+        if status in absent:
             return None
         if status == 403:
             self._cached = None  # keys may have expired early; fetch fresh ones next time
@@ -215,7 +215,10 @@ def sync_events(conn, link: dict, paths: cloud.Paths, *, s3: S3 | None = None,
     index_key = f"packs/{thing}/index.json"
     deadline = clock() + POLL_TIMEOUT_S
     while True:
-        raw = s3.get(index_key)
+        # Before the first answer index.json doesn't exist, and S3 reports a
+        # missing key as 403 (not 404) unless the GET itself passes the
+        # ListBucket prefix condition -- so both mean "not yet" here.
+        raw = s3.get(index_key, absent=(403, 404))
         if raw is not None:
             index = parse_index(raw, thing)
             if index.get("requestId") == request_id:

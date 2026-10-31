@@ -46,7 +46,7 @@ class FakeS3:
     def __init__(self, indexes, packs):
         self.indexes, self.packs, self.gets = list(indexes), packs, []
 
-    def get(self, key):
+    def get(self, key, absent=(404,)):
         self.gets.append(key)
         if key.endswith("/index.json"):
             item = self.indexes.pop(0) if len(self.indexes) > 1 else self.indexes[0]
@@ -225,3 +225,9 @@ def test_to_learn(conn, paths, tmp_path):
     db.upsert_transponder(conn, number=8954097, kind="rc4", racer_name=None, rc4_sha256=None,
                           source="learned")
     assert [r["registration_id"] for r in eventsync.to_learn(conn, rc4, "ev1")] == ["r2"]
+
+
+def test_index_403_means_not_yet():
+    creds = lambda: {"accessKeyId": "A", "secretAccessKey": "S", "sessionToken": "T", "expiration": None}
+    s3 = eventsync.S3("b", "r", creds, lambda u, h: (403, b""))
+    assert s3.get("packs/t/index.json", absent=(403, 404)) is None

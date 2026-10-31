@@ -353,3 +353,33 @@ def to_learn(conn, rc4_dir: str | Path, event_id: str | None = None) -> list[dic
         e["learnable"] = bool(number and number.isdigit())
         out.append(e)
     return out
+
+
+def to_learn_by_event(conn, rc4_dir: str | Path) -> list[dict]:
+    """to_learn grouped per event, events in date order:
+    [{event_id, event_title, event_date, rows: [...]}]. Each row also gets
+    `notified_at_ms` (last notify request, or None)."""
+    notices = db.last_transponder_notices(conn)
+    groups: dict[str, dict] = {}
+    for e in to_learn(conn, rc4_dir):
+        e["notified_at_ms"] = notices.get((e["event_id"], e["registration_id"]))
+        g = groups.setdefault(e["event_id"], {
+            "event_id": e["event_id"], "event_title": e["event_title"],
+            "event_date": e["event_date"], "rows": []})
+        g["rows"].append(e)
+    return list(groups.values())
+
+
+def racer_counts(conn, rc4_dir: str | Path, event_id: str | None = None) -> dict:
+    """Racers and missing transponders, per event and per class:
+    {event_id: {"racers": n, "missing": m, "classes": {class: {"racers", "missing"}}}}."""
+    known = known_transponders(conn, rc4_dir)
+    out: dict[str, dict] = {}
+    for e in db.list_event_entries(conn, event_id):
+        ev = out.setdefault(e["event_id"], {"racers": 0, "missing": 0, "classes": {}})
+        cls = ev["classes"].setdefault(e["racer_class"], {"racers": 0, "missing": 0})
+        missing = not (e["transponder"] and e["transponder"] in known)
+        for bucket in (ev, cls):
+            bucket["racers"] += 1
+            bucket["missing"] += missing
+    return out

@@ -77,8 +77,9 @@ def index():
         current=db.current_learn_session(conn),
         error=request.args.get("error"),
         deleted=request.args.get("deleted", type=int),
-        to_learn=eventsync.to_learn(conn, rc4_dir),
+        to_learn=eventsync.to_learn_by_event(conn, rc4_dir),
         has_events=bool(db.list_events(conn)),
+        notice=request.args.get("notice"),
         # Pre-filled from an event's "Transponders to learn" list.
         prefill_label=request.args.get("label", ""),
         prefill_name=request.args.get("racer_name", ""),
@@ -174,6 +175,35 @@ def cancel(session_id: int):
     _session_or_404(conn, session_id)
     db.close_learn_session(conn, session_id, "cancelled")
     return redirect(url_for("transponders.index"))
+
+
+@bp.post("/transponders/notify/<event_id>")
+@login_required
+def notify(event_id: str):
+    """"Notify racers we are missing their transponder for the race".
+
+    Records a request per racer still on the to-learn list for that event.
+    Nothing is sent yet: texting goes through RC Race HQ once results sync
+    does (docs/learning.md#missing-transponders).
+    """
+    from . import get_db
+    check_csrf()
+    conn = get_db()
+    ev = db.get_event_pack(conn, event_id)
+    if ev is None:
+        abort(404)
+    rows = eventsync.to_learn(conn, _cfg().rc4_dir, event_id)
+    if not rows:
+        return redirect(url_for("transponders.index",
+                                notice=f"Every racer in {ev['title']} has a recorded transponder.")
+                        + "#to-learn")
+    n = db.queue_transponder_notices(conn, event_id, rows)
+    current_app.logger.info("queued %d missing-transponder notices for %s", n, event_id)
+    racers = "racer" if n == 1 else "racers"
+    return redirect(url_for(
+        "transponders.index",
+        notice=f"Noted {n} {racers} in {ev['title']} to notify. "
+               "Texts aren't sent yet; that comes with RC Race HQ sync.") + "#to-learn")
 
 
 @bp.post("/transponders/<int:number>/delete")

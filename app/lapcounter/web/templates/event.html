@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_to_learn.html" import to_learn_table %}
+{% from "_to_learn.html" import missing_summary %}
 {% block title %}{{ ev.title }}{% endblock %}
 {% block body %}
 <p><a href="{{ url_for('events.index') }}">← Events</a></p>
@@ -10,13 +10,19 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if active %}<p class="status ok">On track: <a href="{{ url_for('race.show', run_id=active.id) }}">{{ active.title }}</a></p>{% endif %}
 
+<h2 id="racers">Racers</h2>
+<p>{{ missing_summary(counts) }}</p>
+{% if counts.missing %}<p><a href="{{ url_for('transponders.index') }}#to-learn">Learn the missing transponders →</a></p>{% endif %}
+
 <h2>Classes</h2>
 {% if pack.classes %}
 <table>
-  <thead><tr><th>Class</th><th>Qualifying rounds</th><th>Mains</th><th>Racers</th></tr></thead>
+  <thead><tr><th>Class</th><th>Qualifying rounds</th><th>Mains</th><th>Racers</th><th>Missing transponders</th></tr></thead>
   <tbody>
   {% for c in pack.classes %}
-    <tr><td>{{ c.name }}</td><td>{{ c.qualifyingRounds }}</td><td>{{ c.mains }}</td><td>{{ by_class.get(c.name, [])|length }}</td></tr>
+    <tr><td>{{ c.name }}</td><td>{{ c.qualifyingRounds }}</td><td>{{ c.mains }}</td>{% set cc = counts.classes.get(c.name, {"racers": 0, "missing": 0}) %}
+      <td>{{ cc.racers }}</td>
+      <td>{% if cc.missing %}<a class="badge bad" href="{{ url_for('transponders.index') }}#to-learn">{{ cc.missing }}</a>{% elif cc.racers %}<span class="badge ok">0</span>{% endif %}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -89,28 +95,6 @@
 <p class="note">Shows here once a qualifier heat has finished.</p>
 {% endif %}
 
-<h2>Entries</h2>
-{% if entries %}
-<table>
-  <thead><tr><th>Racer</th><th>Class</th><th>Status</th><th>Transponder</th><th>Car</th></tr></thead>
-  <tbody>
-  {% for e in entries %}
-    <tr>
-      <td>{{ e.racer_name }}</td>
-      <td>{{ e.racer_class }}</td>
-      <td>{{ e.status or "" }}</td>
-      <td>{% if e.transponder %}{{ e.transponder }} {% if e.transponder in known %}<span class="badge ok">learned</span>{% else %}<span class="badge bad">not learned</span>{% endif %}{% else %}<span class="badge bad">none</span>{% endif %}</td>
-      <td>{{ e.vehicle or "" }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p>No registrations yet.</p>
-{% endif %}
-
-<h2 id="to-learn">Transponders to learn</h2>
-{{ to_learn_table(to_learn) }}
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>
 <script src="{{ url_for('static', filename='confirm.js') }}"></script>{% endblock %}

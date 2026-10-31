@@ -12,6 +12,7 @@
   <nav>
     {% if is_admin %}
       <a href="{{ url_for('live.admin') }}">Admin</a>
+      <a href="{{ url_for('events.index') }}">Events</a>
       <a href="{{ url_for('transponders.index') }}">Transponders</a>
       <a href="{{ url_for('settings.index') }}">Settings</a>
       <form method="post" action="{{ url_for('auth.logout') }}" class="inline">

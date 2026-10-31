@@ -17,10 +17,11 @@
 <h2>Transponders</h2>
 <p><a href="{{ url_for('transponders.index') }}">Learn a transponder or see the list</a>.</p>
 <h2>RC Race HQ</h2>
-<p><a href="{{ url_for('settings.index') }}">Link this lap counter to your club's track</a>.</p>
+<p><a href="{{ url_for('settings.index') }}">Link this lap counter to your club's track</a>,
+  then <a href="{{ url_for('events.index') }}">download the club's events</a>.</p>
 <h2>Coming next</h2>
 <ul>
-  <li>Events and lineups</li>
+  <li>Check out an event and run its heats</li>
   <li>Network settings</li>
 </ul>
 {% endblock %}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from .. import db, learning
+from .. import db, eventsync, learning
 from .auth import check_csrf, login_required
 from .live import decoder_view
 
@@ -77,6 +77,11 @@ def index():
         current=db.current_learn_session(conn),
         error=request.args.get("error"),
         deleted=request.args.get("deleted", type=int),
+        to_learn=eventsync.to_learn(conn, rc4_dir),
+        has_events=bool(db.list_events(conn)),
+        # Pre-filled from an event's "Transponders to learn" list.
+        prefill_label=request.args.get("label", ""),
+        prefill_name=request.args.get("racer_name", ""),
     )
 
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_to_learn.html" import to_learn_table %}
 {% block title %}Transponders{% endblock %}
 {% macro delete_button(number) -%}
 <form method="post" action="{{ url_for('transponders.delete', number=number) }}" class="inline"
@@ -12,7 +13,7 @@
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if deleted %}<p class="status ok" role="status">Deleted {{ deleted }}. It can be learned again.</p>{% endif %}
 
-<h2>Learn a transponder</h2>
+<h2 id="learn">Learn a transponder</h2>
 {% if current %}
   <p class="status unknown">Learning {{ current.label }} is still open.
     <a href="{{ url_for('transponders.learn', session_id=current.id) }}">Go back to it</a>,
@@ -23,10 +24,10 @@ send their own number and just get added to the list.</p>
 <form method="post" action="{{ url_for('transponders.start') }}" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <label>Number on the label
-    <input name="label" inputmode="numeric" pattern="[0-9]+" maxlength="10" required autofocus autocomplete="off">
+    <input name="label" inputmode="numeric" pattern="[0-9]+" maxlength="10" required autofocus autocomplete="off" value="{{ prefill_label }}">
   </label>
   <label>Racer name (optional)
-    <input name="racer_name" maxlength="64" autocomplete="off">
+    <input name="racer_name" maxlength="64" autocomplete="off" value="{{ prefill_name }}">
   </label>
   <button type="submit">Learn</button>
 </form>
@@ -34,6 +35,13 @@ send their own number and just get added to the list.</p>
 {% if strays %}
 <p class="error">Decoder files nobody recorded yet: {% for n in strays %}{{ n }}.rc4 {{ delete_button(n) }}{% if not loop.last %}, {% endif %}{% endfor %}.
   The decoder reports those transponders by that number until they're deleted.</p>
+{% endif %}
+
+{% if has_events %}
+<h2 id="to-learn">Transponders to learn</h2>
+<p class="note">Racers in the downloaded <a href="{{ url_for('events.index') }}">events</a> whose
+  transponder isn't recorded on this Pi yet.</p>
+{{ to_learn_table(to_learn, show_event=True) }}
 {% endif %}
 
 <h2>Known transponders</h2>

@@ -1,4 +1,4 @@
-# Lap counter app image: one image, several services (web, lapd; later syncd,
+# Lap counter app image: one image, several services (web, lapd, syncd; later
 # announcerd), chosen by the command in compose.yaml. Built for linux/arm64 (Pi 4).
 FROM python:3.12-slim-bookworm AS build
 WORKDIR /src

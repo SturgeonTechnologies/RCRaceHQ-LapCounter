@@ -8,6 +8,13 @@
   <button type="submit" class="link">Delete</button>
 </form>
 {%- endmacro %}
+{% macro library_cell(number) -%}
+{% set st = library.get(number) %}
+{%- if not st %}<span class="muted">not sent</span>
+{%- elif st.state == "added" %}In library
+{%- elif st.state == "waiting" %}<span class="muted">sending…</span>
+{%- else %}<span class="error" title="{{ st.reason }}">Refused</span><br><small>{{ st.reason }}</small>{% endif %}
+{%- endmacro %}
 {% block body %}
 <h1>Transponders</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
@@ -49,7 +56,7 @@ send their own number and just get added to the list.</p>
 <h2>Known transponders</h2>
 {% if transponders or unlisted_files %}
 <table>
-  <thead><tr><th>Number</th><th>Racer</th><th>Type</th><th>Learned</th><th></th></tr></thead>
+  <thead><tr><th>Number</th><th>Racer</th><th>Type</th><th>Learned</th><th>RC Race HQ</th><th></th></tr></thead>
   <tbody>
   {% for t in transponders %}
     <tr>
@@ -57,11 +64,12 @@ send their own number and just get added to the list.</p>
       <td>{{ t.racer_name or "" }}</td>
       <td>{% if t.kind == "rc4" %}RC4{% if t.number not in has_file %} <span class="error">(file missing)</span>{% endif %}{% else %}RC3 / Hybrid{% endif %}</td>
       <td class="ts" data-ms="{{ t.learned_at_ms }}"></td>
+      <td>{{ library_cell(t.number) }}</td>
       <td>{{ delete_button(t.number) }}</td>
     </tr>
   {% endfor %}
   {% for n in unlisted_files %}
-    <tr><td>{{ n }}</td><td></td><td>RC4 (file only)</td><td></td><td>{{ delete_button(n) }}</td></tr>
+    <tr><td>{{ n }}</td><td></td><td>RC4 (file only)</td><td></td><td>{{ library_cell(n) }}</td><td>{{ delete_button(n) }}</td></tr>
   {% endfor %}
   </tbody>
 </table>

@@ -162,6 +162,28 @@ def standings(run: dict, passings: list[dict]) -> Scored:
     return Scored(rows, unknown)
 
 
+def grid_crossings(run: dict, passings: list[dict]) -> list[dict]:
+    """Every counted crossing of a car on the grid, in time order, numbered the
+    way `standings` counts them: lap 0 is the start-line crossing and each
+    later one carries the lap it completed. These are what the outbox sends
+    to RC Race HQ as heat.lap records."""
+    up = time_up_ms(run)
+    by_t = {as_int(e.get("transponder")): e for e in run["entries"]}
+    out = []
+    for t, seen in counted_crossings(run, passings).items():
+        e = by_t.get(t)
+        if e is None or t is None or (len(seen) == 1 and seen[0]["received_at_ms"] >= up):
+            continue
+        for n, cur in enumerate(seen):
+            out.append({
+                "transponder": t, "registrationId": e.get("registrationId"),
+                "racerName": e.get("racerName") or "", "lapNo": n,
+                "lapMs": _lap_ms(seen[n - 1], cur) if n else None,
+                "tsMs": cur["received_at_ms"],
+            })
+    return sorted(out, key=lambda c: (c["tsMs"], c["transponder"]))
+
+
 def should_finish(run: dict, scored: Scored, now_ms: int) -> bool:
     """True once a time-up heat has nothing left to wait for."""
     if phase(run, now_ms) != FINISHING:

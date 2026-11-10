@@ -145,3 +145,25 @@ def test_admin_only_controls_public_current(client):
     pub = client.get("/api/race/current").get_json()
     assert pub["phase"] == "countdown" and "unknown" not in pub
     assert client.post("/events/ev1/heats/h2/start", data={}).status_code == 302
+
+
+def test_a_finished_heat_lands_in_the_outbox_in_order(client, clock):
+    from lapcounter import outbox, runs
+    start(client)
+    run_id = db.active_heat_run(client.conn)["id"]
+    go = T0 + race.COUNTDOWN_MS
+    for o in (1000, 20000, 39000):
+        cross(client, 7340166, go + o)
+    clock["ms"] = go + 45_000
+    client.post(f"/race/{run_id}/end", data={"csrf": csrf_of(client)})
+    recs = outbox.pending(client.conn)
+    types = [r["type"] for r in recs]
+    assert types[:2] == ["event.checkout", "heat.state"]
+    assert types[-2:] == ["heat.state", "heat.result"]
+    assert [r["payload"]["state"] for r in recs if r["type"] == "heat.state"] == ["staged", "running", "finished"]
+    laps = [r["payload"] for r in recs if r["type"] == "heat.lap"]
+    assert [(lap["transponder"], lap["lapNo"]) for lap in laps] == [(7340166, 0), (7340166, 1), (7340166, 2)]
+    assert laps[1]["lapMs"] == 19000
+    # Building the records again adds nothing (stable uuids).
+    runs.record_progress(client.conn, db.get_heat_run(client.conn, run_id), clock["ms"])
+    assert len(outbox.pending(client.conn)) == len(recs)

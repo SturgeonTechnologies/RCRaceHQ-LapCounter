@@ -158,6 +158,21 @@ def http_get(url: str, headers: dict) -> tuple[int, bytes]:
                          "Check the Pi's internet.") from exc
 
 
+HttpPut = Callable[[str, dict, bytes], int]
+
+
+def http_put(url: str, headers: dict, body: bytes) -> int:
+    req = urllib.request.Request(url, data=body, headers=headers, method="PUT")
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise CloudError(f"Can't reach S3 ({getattr(exc, 'reason', exc)}). "
+                         "Check the Pi's internet.") from exc
+
+
 Creds = Callable[[], dict]
 
 
@@ -165,9 +180,9 @@ class S3:
     """Reads objects from the lap counter bucket with cached short-lived keys."""
 
     def __init__(self, bucket: str, region: str, creds: Creds, get: HttpGet = http_get,
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time, put: HttpPut = http_put):
         self.bucket, self.region = bucket, region
-        self._creds, self._get, self._clock = creds, get, clock
+        self._creds, self._get, self._clock, self._put = creds, get, clock, put
         self._cached: dict | None = None
         self._expires = 0.0
 
@@ -200,6 +215,30 @@ class S3:
             self._cached = None  # keys may have expired early; fetch fresh ones next time
             raise CloudError(f"S3 refused {key} (403). Link the Pi again if this keeps happening.")
         raise CloudError(f"S3 answered HTTP {status} for {key}.")
+
+
+    def put(self, key: str, body: bytes) -> None:
+        """Upload an object (only uploads/<thing>/ is allowed for the Pi)."""
+        keys = self._keys()
+        host = f"{self.bucket}.s3.{self.region}.amazonaws.com"
+        path = sigv4.canonical_path(key)
+        headers = sigv4.sign(
+            method="PUT", host=host, path=path, region=self.region, service="s3",
+            headers={"x-amz-security-token": keys["sessionToken"]},
+            access_key=keys["accessKeyId"], secret_key=keys["secretAccessKey"],
+            date=sigv4.amz_date(datetime.fromtimestamp(self._clock(), timezone.utc)),
+            payload_hash=hashlib.sha256(body).hexdigest(),
+        )
+        headers.pop("host")
+        headers["content-type"] = "application/octet-stream"
+        status = self._put(f"https://{host}{path}", headers, body)
+        if status == 200:
+            return
+        if status == 403:
+            self._cached = None
+            raise CloudError(f"S3 refused the upload of {key} (403). RC Race HQ may not "
+                             "be updated for transponder uploads yet.")
+        raise CloudError(f"S3 answered HTTP {status} uploading {key}.")
 
 
 def _epoch(iso: str | None, now: float) -> float:

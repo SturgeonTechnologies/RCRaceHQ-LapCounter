@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from .. import db, eventsync, learning
+from .. import db, eventsync, learning, syncd
 from .auth import check_csrf, login_required
 from .live import decoder_view
 
@@ -74,6 +74,7 @@ def index():
         has_file=files,
         unlisted_files=sorted(files - listed_numbers),
         strays=learning.stray_auto_files(rc4_dir),
+        library=syncd.library_status(conn),
         current=db.current_learn_session(conn),
         error=request.args.get("error"),
         deleted=request.args.get("deleted", type=int),

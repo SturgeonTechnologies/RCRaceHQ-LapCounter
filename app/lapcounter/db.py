@@ -144,6 +144,38 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX transponder_notice_entry ON transponder_notice (event_id, registration_id);
     """,
+    # 6: outbox to RC Race HQ (docs/club-sync.md, lapcounter/outbox.py) and
+    # which events this Pi has checked out for race day. IF NOT EXISTS because
+    # the first outbox build ran as migration 5 on a test Pi (.197); that Pi
+    # also gets transponder_notice here, since its 5 was the outbox.
+    """
+    CREATE TABLE IF NOT EXISTS outbox (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        type TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        acked_at_ms INTEGER,
+        rejected TEXT
+    );
+    CREATE INDEX IF NOT EXISTS outbox_pending ON outbox (seq) WHERE acked_at_ms IS NULL;
+    CREATE TABLE IF NOT EXISTS event_checkout (
+        event_id TEXT PRIMARY KEY,
+        checked_out_at_ms INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS transponder_notice (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL,
+        registration_id TEXT NOT NULL,
+        racer_name TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        transponder TEXT,
+        requested_at_ms INTEGER NOT NULL,
+        sent_at_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS transponder_notice_entry ON transponder_notice (event_id, registration_id);
+    """,
 )
 
 

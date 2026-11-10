@@ -213,3 +213,15 @@ def test_delete_without_write_permission(admin, rc4, monkeypatch):
     monkeypatch.setattr(type(rc4), "unlink", deny)
     r = post(admin, "/transponders/8954097/delete")
     assert "No+permission" in r.headers["Location"]
+
+
+def test_list_shows_the_library_upload_and_a_locked_refusal(admin, rc4):
+    from lapcounter import outbox
+    (rc4 / "7340166.rc4").write_bytes(b"x")
+    (rc4 / "8954097.rc4").write_bytes(b"y")
+    outbox.add(admin.conn, "transponder.learned", "library", {"transponder": 8954097}, "rc4:a")
+    outbox.add(admin.conn, "transponder.learned", "library", {"transponder": 7340166}, "rc4:b")
+    outbox.acknowledge(admin.conn, 2, [{"seq": 2, "reason": "Transponder 7340166 is already registered in RC Race HQ and locked"}])
+    page = admin.get("/transponders").data.decode()
+    assert "In library" in page
+    assert "Refused" in page and "already registered" in page

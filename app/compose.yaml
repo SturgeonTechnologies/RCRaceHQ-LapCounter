@@ -32,6 +32,21 @@ services:
       OPENSTINT_ZMQ: tcp://127.0.0.1:5556
     volumes:
       - lapcounter-data:/var/lib/lapcounter
+  # Runs heats to time, uploads learned .rc4 files to the shared library and
+  # sends the outbox (results, laps, learned transponders) to RC Race HQ.
+  syncd:
+    image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-m", "lapcounter.syncd"]
+    healthcheck:
+      disable: true
+    environment:
+      LAPCOUNTER_DB: /var/lib/lapcounter/lapcounter.db
+      OPENSTINT_RC4_DIR: /var/lib/openstint
+    volumes:
+      - lapcounter-data:/var/lib/lapcounter
+      - /var/lib/openstint:/var/lib/openstint:ro
 
 volumes:
   lapcounter-data:

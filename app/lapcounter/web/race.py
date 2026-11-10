@@ -1,10 +1,10 @@
 """Race director: start a heat from an event, watch it, end it (docs/racing.md).
 
-Timing rules live in lapcounter/race.py; this module stores runs and serves
-them. A run's standings are worked out from the raw passings each time they are
-asked for, and frozen into results_json when the heat finishes. Auto-finish
-happens on the next request after its condition is met (the live page polls
-every second, so in practice right away).
+Timing rules live in lapcounter/race.py and stored runs in lapcounter/runs.py;
+this module serves them. A run's standings are worked out from the raw passings
+each time they are asked for, and frozen into results_json when the heat
+finishes. Auto-finish happens on the next request or syncd tick after its
+condition is met. Every start and close also goes to the outbox for RC Race HQ.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import json
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from .. import db, race
+from .. import db, race, runs
 from .auth import check_csrf, is_admin, login_required
 
 bp = Blueprint("race", __name__)
@@ -61,34 +61,7 @@ def parse_settings(form) -> tuple[int, int]:
     return round(minutes * 60), round(min_lap_s * 1000)
 
 
-def score(conn, run: dict, now_ms: int) -> race.Scored:
-    end = run["ended_at_ms"] or now_ms
-    return race.standings(run, db.passings_between(conn, run["go_at_ms"], end))
-
-
-def refresh(conn, run: dict, now_ms: int) -> dict:
-    """The run's view, finishing it first if time-up and every car is in."""
-    if run["state"] == "finished" and run["results"] is not None:
-        scored = race.Scored([], [])
-        out = race.view(run, scored, now_ms)
-        out["standings"] = run["results"]["standings"]
-        out["unknown"] = run["results"]["unknown"]
-        return out
-    scored = score(conn, run, now_ms)
-    if run["state"] == "started" and race.should_finish(run, scored, now_ms):
-        finish(conn, run, now_ms)
-        return refresh(conn, db.get_heat_run(conn, run["id"]), now_ms)
-    return race.view(run, scored, now_ms)
-
-
-def finish(conn, run: dict, now_ms: int) -> bool:
-    ended = dict(run, ended_at_ms=now_ms)
-    scored = score(conn, ended, now_ms)
-    results = {"standings": [s.as_dict() for s in scored.standings], "unknown": scored.unknown}
-    closed = db.end_heat_run(conn, run["id"], "finished", results=results, at_ms=now_ms)
-    if closed:
-        current_app.logger.info("heat run %s (%s) finished", run["id"], run["title"])
-    return closed
+refresh = runs.refresh
 
 
 def _run_or_404(conn, run_id: int) -> dict:
@@ -124,14 +97,13 @@ def start(event_id: str, heat_id: str):
     grid = heat_grid(heat, db.list_event_entries(conn, event_id))
     now = db.now_ms()
     try:
-        run_id = db.start_heat_run(
+        run_id = runs.start(
             conn, event_id=event_id, heat_id=heat_id, title=heat_title(heat),
             class_name=heat.get("className"), round_type=heat.get("roundType"),
             round_number=heat.get("roundNumber"), entries=grid, duration_s=duration_s,
             min_lap_ms=min_lap_ms, go_at_ms=now + race.COUNTDOWN_MS, at_ms=now)
     except db.HeatBusy as exc:
         return redirect(url_for("events.show", event_id=event_id, error=str(exc)) + "#heats")
-    current_app.logger.info("heat run %s (%s) countdown started", run_id, heat_title(heat))
     return redirect(url_for("race.show", run_id=run_id))
 
 
@@ -177,9 +149,9 @@ def _close(run_id: int, allowed: set[str], state: str, refused: str):
     if race.phase(run, now) not in allowed:
         return redirect(url_for("race.show", run_id=run_id, error=refused))
     if state == "finished":
-        finish(conn, run, now)
-    elif db.end_heat_run(conn, run_id, state, at_ms=now):
-        current_app.logger.info("heat run %s (%s) %s", run_id, run["title"], state)
+        runs.finish(conn, run, now)
+    else:
+        runs.close(conn, run, state, now)
     return redirect(here)
 
 

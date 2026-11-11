@@ -43,13 +43,14 @@ def create_app(cfg: Config | None = None, *, testing: bool = False) -> Flask:
         MAX_CONTENT_LENGTH=64 * 1024,
     )
 
-    from . import auth, events, live, race, settings, transponders
+    from . import auth, checkin, events, live, race, settings, transponders
     app.register_blueprint(auth.bp)
     app.register_blueprint(live.bp)
     app.register_blueprint(transponders.bp)
     app.register_blueprint(settings.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(race.bp)
+    app.register_blueprint(checkin.bp)
 
     @app.get("/healthz", endpoint="health")
     def health():

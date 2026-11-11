@@ -176,6 +176,19 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX IF NOT EXISTS transponder_notice_entry ON transponder_notice (event_id, registration_id);
     """,
+    # 7: walk-up check-in (lapcounter/checkin.py). The pack carries a first
+    # name and hashed phone tags per entry; check-ins are kept apart from
+    # event_entry so a re-download doesn't wipe them.
+    """
+    ALTER TABLE event_entry ADD COLUMN first_name TEXT;
+    ALTER TABLE event_entry ADD COLUMN phone_tags TEXT;
+    CREATE TABLE entry_checkin (
+        event_id TEXT NOT NULL,
+        registration_id TEXT NOT NULL,
+        checked_in_at_ms INTEGER NOT NULL,
+        PRIMARY KEY (event_id, registration_id)
+    );
+    """,
 )
 
 
@@ -428,6 +441,15 @@ def event_hashes(conn: sqlite3.Connection) -> dict[str, str]:
             for r in conn.execute("SELECT event_id, sha256 FROM event_pack")}
 
 
+def _phone_tags(raw) -> str | None:
+    """Pack phoneTags (hex strings) as one space-separated column."""
+    if not isinstance(raw, list):
+        return None
+    tags = [t for t in raw if isinstance(t, str) and len(t) == 32
+            and all(c in "0123456789abcdef" for c in t)]
+    return " ".join(tags[:4]) or None
+
+
 def store_event_pack(conn: sqlite3.Connection, pack: dict, sha256: str, raw: str,
                      at_ms: int | None = None) -> None:
     """Replace one event (row + entries) with a freshly downloaded pack."""
@@ -442,9 +464,10 @@ def store_event_pack(conn: sqlite3.Connection, pack: dict, sha256: str, raw: str
         )
         conn.executemany(
             "INSERT OR REPLACE INTO event_entry (event_id, registration_id, racer_name, racer_class,"
-            " status, transponder, vehicle) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " status, transponder, vehicle, first_name, phone_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [(pack["eventId"], e["registrationId"], e.get("racerName") or "",
-              e.get("racerClass") or "", e.get("status"), e.get("transponder"), e.get("vehicle"))
+              e.get("racerClass") or "", e.get("status"), e.get("transponder"), e.get("vehicle"),
+              e.get("firstName"), _phone_tags(e.get("phoneTags")))
              for e in pack.get("entries", [])],
         )
         conn.execute("COMMIT")

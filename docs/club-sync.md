@@ -196,6 +196,7 @@ replays the crossings in order when it reconnects and RC Race HQ fills in the ga
 | `heat.state` | `{heatId, state, startedAt, durationS, entries}` | store on the heat, republish to `live/<eventId>` |
 | `heat.lap` | one crossing | write to `laps`, republish to `live/<eventId>` |
 | `heat.result` | final standings | fill `HeatRow.results` (authoritative) |
+| `entry.checkin` | `{registrationId, atMs}` | set `checkedInAt` / `checkedInBy` on the registration (first one wins); see [checkin.md](checkin.md) |
 
 All idempotent on the record `uuid` and applied in `seq` order. Nothing is
 live-only: everything the live view shows is also stored.

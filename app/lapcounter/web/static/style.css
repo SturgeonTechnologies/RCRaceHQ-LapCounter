@@ -36,3 +36,9 @@ ol.grid { margin: .25rem 0 0; padding-left: 1.5rem; font-size: .9rem; }
 form.start-heat { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .25rem 0; font-size: .9rem; }
 form.start-heat input { width: 4.5rem; }
 [hidden] { display: none !important; }
+
+form.checkin { display: grid; gap: .5rem; max-width: 22rem; }
+form.checkin input[type=tel] { font-size: 1.25rem; }
+form.checkin button { font-size: 1.15rem; padding: .6rem; }
+.checkin-cta a { display: inline-block; font-weight: 700; font-size: 1.1rem; padding: .5rem .8rem; border: 2px solid currentColor; border-radius: .4rem; }
+ul.todo li { margin: .4rem 0; }

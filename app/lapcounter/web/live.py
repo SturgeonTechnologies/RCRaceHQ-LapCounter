@@ -42,7 +42,10 @@ def _after_id() -> int:
 
 @bp.get("/")
 def index():
-    return render_template("live.html")
+    from . import get_db
+    from .. import checkin
+    # The hotspot's captive portal lands phones here; point racers at check-in.
+    return render_template("live.html", checkin_open=bool(checkin.open_events(get_db())))
 
 
 @bp.get("/api/live")

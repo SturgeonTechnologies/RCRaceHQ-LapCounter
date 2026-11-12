@@ -36,3 +36,25 @@ ol.grid { margin: .25rem 0 0; padding-left: 1.5rem; font-size: .9rem; }
 form.start-heat { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .25rem 0; font-size: .9rem; }
 form.start-heat input { width: 4.5rem; }
 [hidden] { display: none !important; }
+
+form.checkin { display: grid; gap: .5rem; max-width: 22rem; }
+form.checkin input[type=tel] { font-size: 1.25rem; }
+form.checkin button { font-size: 1.15rem; padding: .6rem; }
+.checkin-cta a { display: inline-block; font-weight: 700; font-size: 1.1rem; padding: .5rem .8rem; border: 2px solid currentColor; border-radius: .4rem; }
+ul.todo li { margin: .4rem 0; }
+ul.checklist { list-style: none; padding: 0; max-width: 34rem; }
+ul.checklist li { display: flex; gap: .6rem; align-items: flex-start; padding: .5rem 0; border-bottom: 1px solid #8883; }
+ul.checklist .mark { font-size: 1.3rem; width: 1.5rem; text-align: center; line-height: 1.2; }
+ul.checklist li.done .mark { color: #1a7f37; }
+ul.checklist li.todo .mark { color: #b35900; }
+ul.checklist .how { font-size: .95rem; opacity: .85; }
+button.ready { font-size: 1.4rem; padding: .8rem 1.2rem; font-weight: 700; }
+button.ready[disabled] { opacity: .45; cursor: not-allowed; }
+.ready-banner { font-size: 1.3rem; font-weight: 700; }
+p.actions { display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; }
+a.button { display: inline-block; padding: .5rem .9rem; border: 2px solid currentColor; border-radius: .4rem; text-decoration: none; }
+/* Kiosk: a shared tablet at the race desk. No menu, big touch targets. */
+body.kiosk main { max-width: 40rem; margin: 2rem auto; font-size: 1.25rem; }
+body.kiosk form.checkin { max-width: none; }
+body.kiosk form.checkin input[type=tel] { font-size: 2rem; padding: .5rem; }
+body.kiosk form.checkin button { font-size: 1.6rem; padding: .9rem; }

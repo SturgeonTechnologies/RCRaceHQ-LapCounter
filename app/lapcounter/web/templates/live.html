@@ -2,6 +2,7 @@
 {% block title %}Live timing{% endblock %}
 {% block body %}
 <h1>Live</h1>
+{% if checkin_open %}<p class="checkin-cta"><a href="{{ url_for('checkin.form') }}">Racing today? Check in here</a></p>{% endif %}
 <p id="decoder" class="status unknown" aria-live="polite">Connecting to the decoder…</p>
 
 <section id="race" data-src="{{ url_for('race.current_json') }}" hidden>

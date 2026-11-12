@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from .. import cloud, db, eventsync, race, scoring
+from .. import checkin, cloud, db, eventsync, outbox, race, scoring
 from .auth import check_csrf, login_required
 
 bp = Blueprint("events", __name__)
@@ -97,6 +97,10 @@ def show(event_id: str):
         defaults={"duration_min": race.DEFAULT_DURATION_S // 60,
                   "min_lap_s": race.DEFAULT_MIN_LAP_MS // 1000},
         error=request.args.get("error"),
+        checkout=outbox.is_checked_out(conn, event_id),
+        checked_in=checkin.checked_in(conn, event_id),
+        ready_ids=checkin.ready(conn, event_id),
+        checkin_note=checkin.note(conn),
     )
 
 

@@ -17,7 +17,9 @@
 <h2 id="checkin">Walk-up check-in</h2>
 {% if checkout %}
 <p>{{ checked_in|length }} of {{ by_reg|length }} registration{{ "" if by_reg|length == 1 else "s" }} checked in.
-  Racers check in at <a href="{{ url_for('checkin.form') }}">Check in</a> on the hotspot with their account phone.</p>
+  {{ ready_ids|length }} ready to race.
+  Racers check in at <a href="{{ url_for('checkin.form') }}">Check in</a> on the hotspot with their account phone,
+  or at a tablet at the desk showing <a href="{{ url_for('checkin.kiosk_form') }}">the kiosk</a>.</p>
 {% set waiting = by_reg.values()|rejectattr("registration_id", "in", checked_in)|list %}
 {% if waiting %}<p class="note">Not here yet: {% for e in waiting %}{{ e.racer_name }} ({{ e.racer_class }}){{ ", " if not loop.last }}{% endfor %}</p>{% endif %}
 {% else %}

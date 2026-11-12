@@ -111,22 +111,64 @@ def first_name(entries: list[dict]) -> str:
     return ""
 
 
-def todos(conn, rc4_dir: str | Path, entries: list[dict]) -> list[str]:
-    """What this racer still needs to do, in plain words."""
+def checklist(conn, rc4_dir: str | Path, entries: list[dict]) -> list[dict]:
+    """The racer's to-do list as items with a done flag, one set per
+    registration: checked in, entry paid, transponder learned. The staff note
+    is the last item and can't be ticked here (done is None)."""
     known = eventsync.known_transponders(conn, rc4_dir)
-    out: list[str] = []
+    here = checked_in(conn, entries[0]["event_id"]) if entries else {}
+    many = len(entries) > 1
+    items: list[dict] = []
     for e in entries:
+        who = f" ({e.get('first_name') or e['racer_name']}, {e['racer_class']})" if many else ""
         number = (e.get("transponder") or "").strip()
         car = e.get("vehicle") or f"{e['racer_class']} car"
+        items.append({"label": f"Checked in{who}", "done": e["registration_id"] in here, "how": ""})
+        items.append({
+            "label": f"Entry paid{who}",
+            "done": e.get("status") == "paid",
+            "how": "Pay at the race desk.",
+        })
         if not number:
-            out.append(f"Bring your {car} and its transponder to the learning table. "
-                       "We don't have a transponder number for you yet.")
-        elif number not in known:
-            out.append(f"Bring your {car} (transponder {number}) to the learning table.")
+            how = f"Bring your {car} and its transponder to the learning table. We don't have a transponder number for you yet."
+        else:
+            how = f"Bring your {car} (transponder {number}) to the learning table."
+        items.append({"label": f"Transponder learned{who}", "done": bool(number) and number in known, "how": how})
     staff = note(conn)
     if staff:
-        out.append(staff)
-    return out
+        items.append({"label": staff, "done": None, "how": ""})
+    return items
+
+
+def all_done(items: list[dict]) -> bool:
+    """Ready once every tickable item is done; the staff note doesn't block."""
+    return all(i["done"] for i in items if i["done"] is not None)
+
+
+def entries_by_id(conn, event_id: str, registration_ids: list[str]) -> list[dict]:
+    """Re-reads entries from the pack (a re-download may have marked them paid)."""
+    if not registration_ids:
+        return []
+    marks = ",".join("?" * len(registration_ids))
+    rows = conn.execute(
+        f"SELECT * FROM event_entry WHERE event_id = ? AND registration_id IN ({marks})"
+        " ORDER BY racer_class, racer_name", (event_id, *registration_ids)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_ready(conn, event_id: str, entries: list[dict], at_ms: int | None = None) -> None:
+    """Records "Ready to race!" for checked-in entries. Kept on the Pi only."""
+    at = at_ms or db.now_ms()
+    for e in entries:
+        conn.execute(
+            "UPDATE entry_checkin SET ready_at_ms = COALESCE(ready_at_ms, ?)"
+            " WHERE event_id = ? AND registration_id = ?", (at, event_id, e["registration_id"]))
+
+
+def ready(conn, event_id: str) -> set[str]:
+    return {r[0] for r in conn.execute(
+        "SELECT registration_id FROM entry_checkin WHERE event_id = ? AND ready_at_ms IS NOT NULL",
+        (event_id,))}
 
 
 class Throttle:

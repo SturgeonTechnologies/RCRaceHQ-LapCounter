@@ -15,8 +15,23 @@ phone number and press **I'm here**.
     not learned on this Pi.
   - The staff note from the event page (for example "Tech inspection at the
     tower"). One note per Pi, shown for every racer.
-- **Staff view:** the event page shows how many registrations are checked in
-  and who isn't here yet.
+- **Checklist:** after the number matches, each registration gets three
+  items with a check mark or a hint: **Checked in**, **Entry paid** (from the
+  pack's status; "Pay at the race desk" until RC Race HQ says paid and the
+  pack is downloaded again) and **Transponder learned** (in this Pi's list or
+  `.rc4` folder). The staff note is shown last and never blocks.
+- **Ready to race!:** the button turns on once every item is ticked.
+  **Check again** re-reads the list after the car has been to the learning
+  table, without typing the number again (the match is kept in the browser's
+  signed session for 15 minutes). Ready is recorded on the Pi only
+  (`entry_checkin.ready_at_ms`); it isn't sent to RC Race HQ yet.
+- **Kiosk (`/kiosk`):** the same flow for a shared tablet at the desk. No
+  menu, big text and buttons, no phone autofill. The screen goes back to the
+  start 45 s after a result (6 s after Ready), and a fresh start screen
+  forgets the last racer, so the next person can't pull up their list.
+  Put a tablet's browser in full-screen on `http://<pi>/kiosk`.
+- **Staff view:** the event page shows how many registrations are checked in,
+  how many are ready to race, and who isn't here yet.
 - **RC Race HQ:** each new check-in queues `entry.checkin`
   (`{registrationId, atMs}`); RC Race HQ stores `checkedInAt` on the
   registration. A second check-in queues nothing.

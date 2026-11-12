@@ -189,6 +189,10 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (event_id, registration_id)
     );
     """,
+    # 8: "Ready to race!" from the check-in checklist (docs/checkin.md).
+    """
+    ALTER TABLE entry_checkin ADD COLUMN ready_at_ms INTEGER;
+    """,
 )
 
 

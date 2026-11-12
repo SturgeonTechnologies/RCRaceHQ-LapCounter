@@ -99,6 +99,7 @@ def show(event_id: str):
         error=request.args.get("error"),
         checkout=outbox.is_checked_out(conn, event_id),
         checked_in=checkin.checked_in(conn, event_id),
+        ready_ids=checkin.ready(conn, event_id),
         checkin_note=checkin.note(conn),
     )
 

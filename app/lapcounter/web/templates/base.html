@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}RC Race Event{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
 </head>
-<body>
+<body{% block body_class %}{% endblock %}>
+{% block header %}
 <header>
   <a class="brand" href="{{ url_for('live.index') }}">RC Race Event</a>
   <nav>
@@ -25,6 +27,7 @@
     {% endif %}
   </nav>
 </header>
+{% endblock %}
 <main>
 {% block body %}{% endblock %}
 </main>

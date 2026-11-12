@@ -160,3 +160,97 @@ def test_note_is_admin_only(site):
     racer.get("/checkin")
     resp = racer.post("/checkin/note", data={"csrf": csrf_of(racer), "note": "x"})
     assert resp.status_code == 302 and "/login" in resp.headers["Location"]
+
+
+# --- checklist, Ready to race!, kiosk ---------------------------------------
+
+def learn(number, conn):
+    db.upsert_transponder(conn, number=number, kind="rc4", racer_name=None, rc4_sha256=None,
+                          source="learned")
+
+
+def ready_post(client, prefix="/checkin"):
+    client.get(f"{prefix}/status")
+    return client.post(f"{prefix}/ready", data={"csrf": csrf_of(client)})
+
+
+def test_checklist_shows_paid_and_transponder_state(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    body = post_phone(racer, PHONE).get_data(as_text=True)
+    assert "Entry paid" in body and "Transponder learned" in body
+    assert "learning table" in body  # 8954097 not learned yet
+    assert 'class="ready" disabled' in body
+
+
+def test_ready_refused_until_everything_is_done(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    post_phone(racer, PHONE)
+    assert ready_post(racer).status_code == 409
+    assert checkin.ready(conn, "ev1") == set()
+
+    learn(8954097, conn)  # learned at the table, then "Check again"
+    again = racer.get("/checkin/status").get_data(as_text=True)
+    assert 'class="ready" disabled' not in again
+    resp = ready_post(racer)
+    assert resp.status_code == 200 and "You're ready, Riley!" in resp.get_data(as_text=True)
+    assert checkin.ready(conn, "ev1") == {"r1"}
+
+
+def test_unpaid_entry_blocks_ready(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    learn(7340166, conn)
+    body = post_phone(racer, PARENT).get_data(as_text=True)  # r2 is pending and has no transponder
+    assert "Pay at the race desk" in body
+    assert ready_post(racer).status_code == 409
+
+
+def test_staff_note_does_not_block_ready(site):
+    conn, admin, racer = site
+    outbox.checkout(conn, "ev1")
+    admin.get("/events/ev1")
+    admin.post("/checkin/note", data={"csrf": csrf_of(admin), "note": "Tech at the tower", "event_id": "ev1"})
+    learn(8954097, conn)
+    assert "Tech at the tower" in post_phone(racer, PHONE).get_data(as_text=True)
+    assert ready_post(racer).status_code == 200
+    assert "1 ready to race" in admin.get("/events/ev1").get_data(as_text=True)
+
+
+def test_ready_without_a_phone_match_goes_back_to_the_start(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    racer.get("/checkin")
+    resp = racer.post("/checkin/ready", data={"csrf": csrf_of(racer)})
+    assert resp.status_code == 302 and resp.headers["Location"].endswith("/checkin")
+    assert racer.get("/checkin/status").status_code == 302
+
+
+def test_kiosk_hides_the_menu_and_forgets_the_racer(site):
+    conn, _admin, kiosk = site
+    outbox.checkout(conn, "ev1")
+    learn(8954097, conn)
+    page = kiosk.get("/kiosk").get_data(as_text=True)
+    assert 'class="kiosk"' in page and "Admin sign in" not in page
+    kiosk.get("/kiosk")
+    body = kiosk.post("/kiosk", data={"csrf": csrf_of(kiosk), "phone": PHONE}).get_data(as_text=True)
+    assert 'http-equiv="refresh"' in body and "url=/kiosk" in body and "Done, next racer" in body
+    done = kiosk.post("/kiosk/ready", data={"csrf": csrf_of(kiosk)})
+    assert done.status_code == 200 and "You're ready, Riley!" in done.get_data(as_text=True)
+    # The next person at the tablet can't pull up Riley's list.
+    assert kiosk.get("/kiosk/status").status_code == 302
+
+
+def test_kiosk_new_screen_drops_the_last_racer(site):
+    conn, _admin, kiosk = site
+    outbox.checkout(conn, "ev1")
+    kiosk.get("/kiosk")
+    kiosk.post("/kiosk", data={"csrf": csrf_of(kiosk), "phone": PHONE})
+    kiosk.get("/kiosk")  # timed out back to the start, or "Done, next racer"
+    assert kiosk.get("/kiosk/status").status_code == 302
+
+
+def test_checkin_link_still_points_at_checkin(site):
+    _conn, _admin, racer = site
+    assert 'href="/checkin"' in racer.get("/").get_data(as_text=True)

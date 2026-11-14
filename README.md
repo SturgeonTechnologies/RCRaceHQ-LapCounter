@@ -31,7 +31,7 @@ holds the services and web UI around it, and the hardware.
 ```bash
 cd app
 pip install -e '.[test]' && pytest       # tests
-docker compose up --build                # web on :8080, lapd → 127.0.0.1:5556
+docker compose up --build                # web on :80, lapd → 127.0.0.1:5556
 ```
 
 Ship a version: merge to `main` (pushes `:sha-<7>`) or tag `vX.Y.Z` (pushes

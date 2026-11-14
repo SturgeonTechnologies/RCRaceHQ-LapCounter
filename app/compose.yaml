@@ -20,6 +20,8 @@ services:
     volumes:
       - lapcounter-data:/var/lib/lapcounter
       - /var/lib/openstint:/var/lib/openstint
+      # Settings → Advanced writes wifi.json here; the host applies it to the hotspot.
+      - ${LAPCOUNTER_WIFI_HOST_DIR:-./wifi}:/etc/lapcounter
   lapd:
     image: ${LAPCOUNTER_IMAGE:-lapcounter:dev}
     network_mode: host

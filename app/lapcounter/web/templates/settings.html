@@ -50,6 +50,22 @@
     in the deploy inventory and redeploy.</p>
 {% endif %}
 {% if api_url %}<p class="note">API: {{ api_url }}</p>{% endif %}
+
+<h2>Advanced: hotspot Wi-Fi</h2>
+<p class="note">Open (the default) lets racers check in and see race status without a password.
+  Choose WPA2 to encrypt the network; racers then need the passphrase.</p>
+<form method="post" action="{{ url_for('settings.set_wifi') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <p><label>Network name <input name="ssid" value="{{ wifi.ssid }}" maxlength="32" required></label></p>
+  <p><label>Security
+    <select name="security">
+      <option value="open" {% if wifi.security == 'open' %}selected{% endif %}>Open (no password)</option>
+      <option value="wpa2" {% if wifi.security == 'wpa2' %}selected{% endif %}>WPA2 passphrase</option>
+    </select></label></p>
+  <p><label>Passphrase (WPA2 only) <input name="passphrase" type="password" value="{{ wifi.passphrase }}"
+    minlength="8" maxlength="63" autocomplete="off"></label></p>
+  <button type="submit">Save Wi-Fi</button>
+</form>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='times.js') }}"></script>
 <script src="{{ url_for('static', filename='confirm.js') }}"></script>

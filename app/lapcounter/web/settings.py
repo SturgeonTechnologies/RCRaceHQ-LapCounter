@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 
-from .. import cloud
+from .. import cloud, wifi
 from .auth import check_csrf, login_required
 
 bp = Blueprint("settings", __name__)
@@ -51,7 +51,22 @@ def index():
         pairing=cloud.current_pairing(conn),
         error=request.args.get("error"),
         notice=request.args.get("notice"),
+        wifi=wifi.load(_cfg().wifi_dir),
     )
+
+
+@bp.post("/settings/wifi")
+@login_required
+def set_wifi():
+    check_csrf()
+    form = request.form
+    try:
+        conf = wifi.validate(form.get("security", ""), form.get("ssid", ""),
+                             form.get("passphrase", ""))
+        wifi.save(_cfg().wifi_dir, conf)
+    except wifi.WifiError as exc:
+        return _back(error=str(exc))
+    return _back(notice="Wi-Fi saved. The hotspot restarts in a moment; reconnect if you're on it.")
 
 
 @bp.post("/settings/link")

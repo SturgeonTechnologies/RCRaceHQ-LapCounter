@@ -37,3 +37,11 @@ docker compose up --build                # web on :8080, lapd → 127.0.0.1:5556
 Ship a version: merge to `main` (pushes `:sha-<7>`) or tag `vX.Y.Z` (pushes
 `:vX.Y.Z`), then set `lapcounter_app_image_tag` in the deploy repo's inventory
 and run its `deploy_lapcounter_app.yml`. Details in [docs/build.md](docs/build.md).
+
+## License
+
+Source-available. Software is [FSL-1.1-ALv2](LICENSE) (becomes Apache-2.0 two
+years after each release); the HAT board in `hardware/` is
+[CERN-OHL-S-2.0](hardware/LICENSE). Plain-language summary in
+[LICENSING.md](LICENSING.md). "RC Race HQ" is a trademark of Sturgeon
+Technologies LLC.

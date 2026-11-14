@@ -8,6 +8,14 @@ Status: draft for review. Nothing here is built yet.
 - **A board from us is required.** DIY boards (built from the public
   CERN-OHL-S files) run the public app but cannot activate Standalone.
 - **Secure element (ATECC608) is a later board revision**, not v1.
+- **Bundled with the board.** The license is sold with one of our boards,
+  never on its own. Each rev 1.1 board leaves the bench with its license
+  key already bound to its serial; the key is printed on a card in the box.
+- **1 year of updates.** The owner keeps the version they have forever and
+  gets every -pro release published within 12 months of activation
+  (`updatesUntil`). See *Updates window* below.
+- **v1 boards (no EEPROM) activate on the Pi serial.** Admin-only, for our
+  existing boards (Riley's, NCT's). See *Legacy v1 activation* below.
 
 ## What Standalone adds
 
@@ -110,6 +118,33 @@ docker login ghcr.io with pullToken; pull -pro image
   match the hardware. **No phone-home is required** after activation, so a
   track with no signal never locks anyone out.
 
+## Updates window
+
+- `updatesUntil` = activation date + 12 months, written into the signed
+  license file.
+- Every -pro image carries its release date (OCI label
+  `org.opencontainers.image.created`, also baked into the code).
+- On start, the -pro module compares its release date to `updatesUntil`.
+  A newer image than the window allows **does not run Standalone**; it
+  logs why and the Pi falls back to the public app features.
+- The updater (and installer) only offers -pro tags released on or before
+  `updatesUntil`, so an owner past the window simply stays on their last
+  allowed version. Nothing stops working.
+- Security fixes after the window: Admin can extend `updatesUntil` for a
+  key (re-issues the file). Paid update renewals are not decided yet.
+
+## Legacy v1 activation (no EEPROM)
+
+For boards we already shipped before rev 1.1 (Riley's, NCT's):
+
+- **Admin-only.** In Admin -> Licenses, an admin creates a key with
+  `legacy: true` and the Pi's CPU serial. There is no self-service path.
+- The license file has `boardSerial: null` and binds to `piSerial` only.
+- **Moves are admin-only too**, because there is no board to anchor to.
+- Weaker than rev 1.1 (nothing ties it to our hardware), which is why it
+  stays a hand-issued exception. When the owner upgrades to a rev 1.1
+  board, Admin retires the legacy key and binds a normal one.
+
 ## Moving a license
 
 The **board is the anchor**; the Pi is replaceable.
@@ -139,8 +174,9 @@ New tables (both in the nightly backup):
 
 - `boards`: `serial` (pk), `uuid`, `rev`, `status`
   (`in_stock|sold|bound|retired`), `licenseKey`, `soldTo`, history.
-- `licenses`: `key` (pk), `ownerUserId`/`clubId`, `plan`, `boardSerial`,
-  `piSerial`, `moves[]`, `issued`, `updatesUntil`, `status`.
+- `licenses`: `key` (pk), `ownerUserId`/`clubId`, `plan`, `boardSerial`
+  (null for legacy), `piSerial`, `legacy`, `moves[]`, `issued`,
+  `updatesUntil`, `status`.
 
 New endpoints: `POST /licenses/activate` (unauthenticated, rate-limited,
 key + hardware IDs), `POST /licenses/{key}/move` (owner), Admin CRUD for
@@ -150,7 +186,8 @@ in the same PR.
 
 ## Build order
 
-1. HAT rev 1.1 (EEPROM) + factory programming script. *(Me + Riley for the order.)*
+1. HAT rev 1.1 (EEPROM) + factory programming script, which also creates
+   the board's bundled license key. *(Me + Riley for the order.)*
 2. RCRaceHQ: boards/licenses tables, KMS key, activate endpoint, Admin pages.
 3. Public app: the optional-blueprint hook (small, no license logic).
 4. `RCRaceHQ-LapCounter-Pro`: license verification, local event/class
@@ -161,9 +198,6 @@ in the same PR.
 
 ## Open questions for Riley
 
-1. **Price** for the one-time license, and is it sold with the board as a
-   bundle, or as an add-on to an already-bought board?
-2. **Updates**: one-time usually means "this version forever, plus N years
-   of updates". 1 year? Lifetime? (`updatesUntil` in the file handles either.)
-3. **Existing v1 boards** (no EEPROM, e.g. yours and NCT's): allow a
-   one-off admin activation tied to the Pi serial only, or require rev 1.1?
+1. **Price** of the board + license bundle.
+2. **Update renewals** after the first year: free extensions only for
+   security fixes (current plan), or a paid renewal later?

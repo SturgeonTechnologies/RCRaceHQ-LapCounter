@@ -25,7 +25,8 @@
   <label for="phone">Phone number</label>
   <input id="phone" name="phone" type="tel" inputmode="tel" {% if not kiosk %}autocomplete="tel"{% endif %} required maxlength="40"
          value="{{ phone }}" placeholder="509 555 1234" {% if kiosk %}autofocus{% endif %}>
-  <button type="submit">I'm here</button>
+  <button type="submit" name="action" value="arrive">I'm here, check me in</button>
+  {% if not kiosk %}<button type="submit" name="action" value="look" class="secondary">Just show what I still need</button>{% endif %}
 </form>
 {% endif %}
 {% endblock %}

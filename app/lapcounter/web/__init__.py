@@ -1,7 +1,7 @@
 """Flask web app: first-run admin setup, local login, live view, transponders,
 events downloaded from RC Race HQ, running heats, settings (link to RC Race HQ).
 
-    gunicorn -k gthread --threads 8 -b 0.0.0.0:80 'lapcounter.web:create_app()'
+    gunicorn -k gthread --threads 8 -b 0.0.0.0:8080 'lapcounter.web:create_app()'
 
 The live stream is Server-Sent Events, so gunicorn must use threaded workers
 (gthread); a sync worker would be tied up by one browser tab.
@@ -27,7 +27,7 @@ class TrustLocalProxy:
     (http://race/), so every request arrives from 127.0.0.1. race-portal drops
     any X-Forwarded-For the client sent and sets exactly one, the real client
     address. Without this, the check-in throttle and the login log would see
-    every phone as 127.0.0.1. A client that reaches :80 directly (wired side)
+    every phone as 127.0.0.1. A client that reaches :8080 directly (wired side)
     can't spoof its address: its REMOTE_ADDR isn't local, so the header is ignored.
     """
 

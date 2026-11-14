@@ -2,7 +2,7 @@
 
 Racers at the track join the hotspot, land on the live page (the captive
 portal sends them to `/`), tap **Racing today? Check in here**, type their
-phone number and press **I'm here**.
+phone number and press **I'm here, check me in**. On their own phone they can instead press **Just show what I still need** to see the checklist without checking in (handy from the parking lot); the list then has an **I'm here** button. The desk kiosk always checks in.
 
 - **Open only on race day:** the page works once an event is checked out on
   this Pi (Events → event → Check out). Before that it says check-in isn't open.

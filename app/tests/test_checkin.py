@@ -254,3 +254,36 @@ def test_kiosk_new_screen_drops_the_last_racer(site):
 def test_checkin_link_still_points_at_checkin(site):
     _conn, _admin, racer = site
     assert 'href="/checkin"' in racer.get("/").get_data(as_text=True)
+
+
+# --- "Just show what I still need" -------------------------------------------
+
+def test_look_shows_list_without_checking_in(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    body = post_phone(racer, PHONE, action="look").get_data(as_text=True)
+    assert "not checked in yet" in body and "Transponder learned" in body
+    assert checkin.checked_in(conn, "ev1") == {}
+    assert not [r for r in outbox.pending(conn) if r["type"] == "entry.checkin"]
+
+    racer.get("/checkin/status")
+    resp = racer.post("/checkin/arrive", data={"csrf": csrf_of(racer)})
+    assert resp.status_code == 200 and "You're checked in" in resp.get_data(as_text=True)
+    assert set(checkin.checked_in(conn, "ev1")) == {"r1"}
+
+
+def test_arrive_needs_a_remembered_match(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    racer.get("/checkin")
+    resp = racer.post("/checkin/arrive", data={"csrf": csrf_of(racer)})
+    assert resp.status_code == 302 and checkin.checked_in(conn, "ev1") == {}
+
+
+def test_kiosk_ignores_look_and_always_checks_in(site):
+    conn, _admin, racer = site
+    outbox.checkout(conn, "ev1")
+    page = racer.get("/kiosk").get_data(as_text=True)
+    assert "Just show what I still need" not in page
+    racer.post("/kiosk", data={"csrf": csrf_of(racer), "phone": PHONE, "action": "look"})
+    assert set(checkin.checked_in(conn, "ev1")) == {"r1"}

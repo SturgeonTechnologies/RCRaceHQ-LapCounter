@@ -40,8 +40,10 @@ def _form(events, *, error=None, phone="", status=200):
 def _show(conn, event_id: str, entries: list[dict], *, message=None, status=200):
     cfg = current_app.config["LAPCOUNTER"]
     items = checkin.checklist(conn, cfg.rc4_dir, entries)
+    here = checkin.checked_in(conn, event_id)
     return render_template(
         "checkin_done.html",
+        arrived=bool(entries) and all(e["registration_id"] in here for e in entries),
         name=checkin.first_name(entries),
         classes=sorted({e["racer_class"] for e in entries}),
         items=items,
@@ -111,7 +113,10 @@ def submit():
         return _form(events, phone=raw, status=404,
                      error="We couldn't find a registration with that number. "
                            "Check it's the phone on your RC Race HQ account, or see the race desk.")
-    checkin.check_in(conn, event_id, entries)
+    # "Just show my list" (racer's own phone only) looks without checking in,
+    # e.g. from the parking lot. The desk kiosk always checks in.
+    if _kiosk() or request.form.get("action") != "look":
+        checkin.check_in(conn, event_id, entries)
     session[SESSION_KEY] = {"event": event_id, "regs": [e["registration_id"] for e in entries],
                             "at": db.now_ms()}
     return _show(conn, event_id, checkin.entries_by_id(conn, event_id, [e["registration_id"] for e in entries]))
@@ -127,6 +132,20 @@ def status():
     if not found:
         return redirect(_home())
     return _show(conn, *found)
+
+
+@bp.post("/checkin/arrive")
+def arrive():
+    """"I'm here" after looking at the list without checking in."""
+    from . import get_db
+    check_csrf()
+    conn = get_db()
+    found = _remembered(conn)
+    if not found:
+        return redirect(_home())
+    event_id, entries = found
+    checkin.check_in(conn, event_id, entries)
+    return _show(conn, event_id, checkin.entries_by_id(conn, event_id, [e["registration_id"] for e in entries]))
 
 
 @bp.post("/checkin/ready")

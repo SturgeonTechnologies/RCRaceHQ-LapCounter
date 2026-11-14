@@ -21,6 +21,9 @@ class Config:
     # Link key + certificate (0700 folder, 0600 files) on the app's data volume.
     cloud_dir: str = "/var/lib/lapcounter/cloud"
 
+    # Host folder (bind-mounted) holding wifi.json for the hotspot; the deploy applies it.
+    wifi_dir: str = "/etc/lapcounter"
+
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Config":
         env = os.environ if env is None else env
@@ -31,4 +34,5 @@ class Config:
             rc4_dir=env.get("OPENSTINT_RC4_DIR", cls.rc4_dir),
             rcracehq_api_url=env.get("RCRACEHQ_API_URL", cls.rcracehq_api_url),
             cloud_dir=env.get("LAPCOUNTER_CLOUD_DIR", cls.cloud_dir),
+            wifi_dir=env.get("LAPCOUNTER_WIFI_DIR", cls.wifi_dir),
         )

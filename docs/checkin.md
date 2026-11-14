@@ -47,6 +47,18 @@ A phone number has few enough possibilities that a tag can be brute-forced by
 someone who has the pack, so this keeps numbers out of the pack and off the
 SD card, not out of reach of a determined attacker with the Pi.
 
-The hotspot is open, so anyone on it can type any number. Tries are limited to
+The hotspot is open by default (Settings → Advanced can switch it to WPA2; see
+below), so anyone on it can type any number. Tries are limited to
 6 a minute per device and 60 a minute overall, and a match shows only a first
 name and classes. A texted code can be added once SMS is live.
+
+## Hotspot Wi-Fi (Settings → Advanced)
+
+Default is open, so racers can check in and see race status. An admin can set
+the network name and switch to WPA2. The web container writes
+`wifi.json` (`{"security": "open"|"wpa2", "ssid": "...", "passphrase": "..."}`)
+into `LAPCOUNTER_WIFI_DIR` (`/etc/lapcounter`), which compose bind-mounts from
+the host (`LAPCOUNTER_WIFI_HOST_DIR`). The deploy (`lapcounter_app` role in
+RCRaceHQ-LapCounter-Deploy) must mount that directory and apply the file to the
+hotspot's NetworkManager profile when it changes. The file is 0640 and holds the
+passphrase in clear text.

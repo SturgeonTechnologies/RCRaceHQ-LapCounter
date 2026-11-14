@@ -19,7 +19,7 @@ lineup editing on the Pi, results upload to RC Race HQ (outbox), the learning pa
 ## Run
 
 ```
-docker compose up --build        # web on :8080, lapd talks to 127.0.0.1:5556
+docker compose up --build        # web on :80, lapd talks to 127.0.0.1:5556
 ```
 
 Without Docker:
@@ -27,10 +27,10 @@ Without Docker:
 ```
 pip install -e '.[test]'
 LAPCOUNTER_DB=./dev.db python -m lapcounter.lapd &
-LAPCOUNTER_DB=./dev.db flask --app 'lapcounter.web:create_app()' run -p 8080
+LAPCOUNTER_DB=./dev.db flask --app 'lapcounter.web:create_app()' run -p 8080  # dev only; the image itself serves on :80
 ```
 
-Open `http://<pi>:8080/`. The first visit goes to **Set up the lap counter**.
+Open `http://<pi>/`. The first visit goes to **Set up the lap counter**.
 Transponders are at `/transponders`, events and heats at `/events` and the RC Race HQ link at `/settings`
 once you're signed in.
 

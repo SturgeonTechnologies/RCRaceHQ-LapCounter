@@ -17,6 +17,33 @@ from flask import Flask, g, redirect, request, url_for
 from .. import __version__, db
 from ..config import Config
 
+LOCAL_PROXIES = frozenset({"127.0.0.1", "::1"})
+
+
+class TrustLocalProxy:
+    """Use X-Forwarded-For only when the request came from this Pi.
+
+    On the event Wi-Fi, phones reach the app through race-portal on port 80
+    (http://race/), so every request arrives from 127.0.0.1. race-portal drops
+    any X-Forwarded-For the client sent and sets exactly one, the real client
+    address. Without this, the check-in throttle and the login log would see
+    every phone as 127.0.0.1. A client that reaches :8080 directly (wired side)
+    can't spoof its address: its REMOTE_ADDR isn't local, so the header is ignored.
+    """
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        forwarded = environ.get("HTTP_X_FORWARDED_FOR", "")
+        if forwarded and environ.get("REMOTE_ADDR") in LOCAL_PROXIES:
+            client = forwarded.split(",")[-1].strip()
+            if client:
+                environ["lapcounter.proxy_addr"] = environ["REMOTE_ADDR"]
+                environ["REMOTE_ADDR"] = client
+        return self.wsgi_app(environ, start_response)
+
+
 # Endpoints reachable before an admin exists. Everything else redirects to setup,
 # which is what the captive portal lands phones on during first boot.
 OPEN_BEFORE_SETUP = frozenset({"auth.setup", "static", "health"})
@@ -25,6 +52,7 @@ OPEN_BEFORE_SETUP = frozenset({"auth.setup", "static", "health"})
 def create_app(cfg: Config | None = None, *, testing: bool = False) -> Flask:
     cfg = cfg or Config.from_env()
     app = Flask(__name__)
+    app.wsgi_app = TrustLocalProxy(app.wsgi_app)
     app.config["LAPCOUNTER"] = cfg
 
     boot = db.open_db(cfg.db_path)

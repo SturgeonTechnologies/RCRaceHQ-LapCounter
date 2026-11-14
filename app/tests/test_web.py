@@ -139,3 +139,42 @@ def test_stream_endpoint_headers(client):
 def test_secret_key_persists_across_app_instances(cfg):
     from lapcounter.web import create_app
     assert create_app(cfg).secret_key == create_app(cfg).secret_key
+
+
+
+# ── behind race-portal (http://race/ on port 80) ─────────────────────────
+
+def _addr_through_proxy(remote, forwarded=None):
+    from lapcounter.web import TrustLocalProxy
+    seen = {}
+
+    def inner(environ, start_response):
+        seen["addr"] = environ["REMOTE_ADDR"]
+        start_response("200 OK", [])
+        return [b""]
+
+    environ = {"REMOTE_ADDR": remote}
+    if forwarded is not None:
+        environ["HTTP_X_FORWARDED_FOR"] = forwarded
+    TrustLocalProxy(inner)(environ, lambda *a: None)
+    return seen["addr"]
+
+
+@pytest.mark.parametrize("remote,forwarded,expected", [
+    ("127.0.0.1", "10.77.0.61", "10.77.0.61"),          # phone via race-portal
+    ("::1", "10.77.0.61", "10.77.0.61"),
+    ("127.0.0.1", "6.6.6.6, 10.77.0.61", "10.77.0.61"),  # only the portal's own entry counts
+    ("192.168.0.40", "10.77.0.61", "192.168.0.40"),      # wired client can't spoof
+    ("10.77.0.61", "127.0.0.1", "10.77.0.61"),
+    ("127.0.0.1", None, "127.0.0.1"),
+    ("127.0.0.1", " ", "127.0.0.1"),
+])
+def test_forwarded_for_only_trusted_from_this_pi(remote, forwarded, expected):
+    assert _addr_through_proxy(remote, forwarded) == expected
+
+
+def test_app_is_wrapped(tmp_path):
+    from lapcounter.config import Config
+    from lapcounter.web import TrustLocalProxy, create_app
+    app = create_app(Config(db_path=str(tmp_path / "p.db")), testing=True)
+    assert isinstance(app.wsgi_app, TrustLocalProxy)

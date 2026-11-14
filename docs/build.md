@@ -32,13 +32,13 @@ image, so a Pi that has it never needs to pull it again.
 
 | Service | Command | Port | What |
 |---|---|---|---|
-| `web` | `gunicorn --worker-class gthread … 'lapcounter.web:create_app()'` (image default) | 80 | First-run setup, admin sign-in, public live view (SSE), `/healthz` |
+| `web` | `gunicorn --worker-class gthread … 'lapcounter.web:create_app()'` (image default) | 8080 | First-run setup, admin sign-in, public live view (SSE), `/healthz` |
 | `lapd` | `python -m lapcounter.lapd` | — | Subscribes to OpenStint's ZeroMQ feed, writes passings + decoder stats to SQLite |
 
 - Base `python:3.12-slim-bookworm`, two stages (wheel build, then install).
 - Runs as `lapcounter` (uid 10001). `/var/lib/lapcounter` is the only
   writable path that matters (SQLite in WAL mode, shared by both services).
-- Healthcheck: `GET http://127.0.0.1/healthz` every 30 s (disabled for
+- Healthcheck: `GET http://127.0.0.1:8080/healthz` every 30 s (disabled for
   `lapd`, which has no port).
 - Env: `LAPCOUNTER_DB`, `OPENSTINT_ZMQ`, `LAPCOUNTER_DECODER_STALE_S`; see
   [app/README.md](../app/README.md#environment).
@@ -47,7 +47,7 @@ image, so a Pi that has it never needs to pull it again.
 
 ```bash
 cd app
-docker compose up --build                  # native arch, web on :80
+docker compose up --build                  # native arch, web on :8080
 docker buildx build --platform linux/arm64 -t lapcounter:dev .   # Pi arch (QEMU on x86, native on arm64)
 ```
 

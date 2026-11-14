@@ -13,7 +13,7 @@ still works and follows the same rules).
 
 ## Using it
 
-1. Sign in, open **Transponders** (`http://<pi>/transponders`).
+1. Sign in, open **Transponders** (`http://<pi>:8080/transponders`).
 2. Type the **number on the label** and, optionally, the racer's name. Press
    **Learn**. This opens the Learn page for that number.
 3. Turn on **only** that transponder and set the car still on the pad or the

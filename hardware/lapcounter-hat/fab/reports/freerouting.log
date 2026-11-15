@@ -1,0 +1,33 @@
+2026-11-14 20:31:14.214 INFO   Freerouting v2.5.0 (build-date: 2026-10-05)
+2026-11-14 20:31:14.592 INFO   Hardware: 8 CPU cores, 403 CPU score, 512 MB RAM
+2026-11-14 20:31:14.594 WARN   Deprecated settings path '-mp / --router.max_passes'; use '--router.autorouter.max_passes' instead. The old path will be removed in a future release.
+2026-11-14 20:31:14.604 WARN   GUI is disabled and you don't have a console available, so the only feedback from Freerouting is in the log.
+2026-11-14 20:31:15.717 WARN   Deprecated settings path 'router.max_passes'; use 'router.autorouter.max_passes' instead. The old path will be removed in a future release.
+2026-11-14 20:31:15.992 INFO   [32D882\60B656] Loading board file 'board.dsn'...
+2026-11-14 20:31:16.285 INFO   [32D882\60B656] Job '32D882\60B656' started at 2026-11-15T04:31:16.285221967Z.
+2026-11-14 20:31:16.498 INFO   [32D882\60B656] Pipeline thread limits: autorouter pass is single-threaded, optimizer.max_threads=7.
+2026-11-14 20:31:16.622 INFO   [32D882\60B656] Fanout stage started on board 'e1f008c046347e15898a1fe529f8fc08' with 173 of 180 SMD pins needing fanout (0 already connected, 7 netless).
+2026-11-14 20:31:20.444 INFO   [32D882\60B656] Fanout pass #1 on board '4250b88e6dfffefc5499160fc3bc9271' completed in 3.75 seconds with 158 SMD pins fanouted, 3 not routed, 0 insert errors, +52 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-11-14 20:31:21.210 INFO   [32D882\60B656] Fanout pass #2 on board '27dd68073649d8072a2ee44692ecf594' completed in 0.74 seconds with 26 SMD pins fanouted, 3 not routed, 0 insert errors, +15 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-11-14 20:31:21.485 INFO   [32D882\60B656] Fanout pass #3 on board 'ff782b1c9b96364ba5291fccc6462005' completed in 0.25 seconds with 6 SMD pins fanouted, 1 not routed, 0 insert errors, +4 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-11-14 20:31:21.695 INFO   [32D882\60B656] Fanout pass #4 on board '4893119df7b748ac70b2737d098a4d99' completed in 0.18 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-11-14 20:31:21.892 INFO   [32D882\60B656] Fanout pass #5 on board '6c74be21b54e288adef0998a8fb3d7df' completed in 0.17 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=500).
+2026-11-14 20:31:22.074 INFO   [32D882\60B656] Fanout pass #6 on board '1520a5834b2e63d1a487fd4999c7b0d5' completed in 0.16 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=600).
+2026-11-14 20:31:22.250 INFO   [32D882\60B656] Fanout pass #7 on board '0cc2ac497c835e99dd9eb28f33fa37f3' completed in 0.15 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=700).
+2026-11-14 20:31:22.250 INFO   Fanout stopped after 7 passes: no progress for 3 consecutive passes.
+2026-11-14 20:31:22.272 INFO   [32D882\60B656] Fanout stage completed: started with 173 total SMD pins, completed in 5.62 seconds, escaped pins: 170/173 (98.3%), using 5.55 total CPU seconds, 1.87 GB total allocated, and 114.1 MB peak heap usage.
+2026-11-14 20:31:22.396 INFO   [32D882\60B656] Auto-routing stage started on board '0cc2ac497c835e99dd9eb28f33fa37f3' with baseline score 372.55 for 80 unrouted items.
+2026-11-14 20:31:31.172 INFO   [32D882\60B656] Auto-routing pass #1 on board '0cc2ac497c835e99dd9eb28f33fa37f3' was completed in 8.69 seconds with score 945.10 (7 unrouted and 0 violations), using 13.58 CPU seconds and the job allocated 5.48 GB of memory so far.
+2026-11-14 20:31:34.464 INFO   [32D882\60B656] Auto-routing pass #2 on board '3abc94205895d1f80f6576c6d686646e' was completed in 3.22 seconds with score 976.47 (3 unrouted and 0 violations), using 17.47 CPU seconds and the job allocated 7.34 GB of memory so far.
+2026-11-14 20:31:35.348 INFO   [32D882\60B656] Auto-routing pass #3 on board 'f997077b6dbfdf59a0aad22621295dff' was completed in 0.81 seconds with score 1000.00 (0 unrouted and 0 violations), using 18.45 CPU seconds and the job allocated 7.77 GB of memory so far.
+2026-11-14 20:31:35.469 INFO   [32D882\60B656] Auto-routing pass #4 on board '39f03d45382e7a8b5f2bf46795bd7935' was completed in 0.05 seconds with score 1000.00 (0 unrouted and 0 violations), using 18.45 CPU seconds and the job allocated 7.77 GB of memory so far.
+2026-11-14 20:31:35.681 INFO   [32D882\60B656] Auto-routing stage completed: started with 170 unrouted nets, completed in 19.12 seconds, final score: 1000.00 (0 unrouted and 0 violations), using 18.45 total CPU seconds, 7.77 GB total allocated, and 120.1 MB peak heap usage.
+2026-11-14 20:31:35.869 INFO   [32D882\60B656] Optimization stage started on board '4f1edc84b929dbe589a922633afcd60c'. Baseline router score: 1000.00, optimizer score: 455.84, incomplete connections: 0, clearance violations: 0.
+2026-11-14 20:31:56.437 INFO   [32D882\60B656] Stopping optimization pass #1 early after 12 consecutive items could not be improved.
+2026-11-14 20:31:56.789 INFO   [32D882\60B656] Optimizer pass #1 on board '64f26a6212c6119e68a91722203191bd' was completed in 20.65 seconds with the score of 465.04 (0 unrouted and 0 violations).
+2026-11-14 20:31:56.841 INFO   [32D882\60B656] Optimizer pass #1: optimizer score 455.84 -> 465.04 (IMPROVED, 2.0177%), router score: 1000.00, incomplete connections: 0, clearance violations: 0.
+2026-11-14 20:31:56.842 INFO   [32D882\60B656] Stopping optimizer because the improvement in this pass (2.0177%) is below the threshold (2.50%).
+2026-11-14 20:31:56.928 INFO   [32D882\60B656] Optimization stage completed:. Baseline router score: 1000.00, baseline optimizer score: 455.84, final router score: 1000.00, final optimizer score: 465.04, completed in 21.02 seconds, using 86.94 total CPU seconds, 27.55 GB total allocated, and 218.8 MB peak heap usage.
+2026-11-14 20:31:56.945 INFO   [32D882\60B656] Job '32D882\60B656' finished with state: COMPLETED (elapsed: 40.66 seconds, finished at UTC: 2026-11-15T04:31:56.943832203Z).
+2026-11-14 20:31:56.969 INFO   Saving output file '/tmp/tmp.nW9RtPhotQ/board.ses' (SES)...
+2026-11-14 20:31:56.973 INFO   Successfully saved output file '/tmp/tmp.nW9RtPhotQ/board.ses' (56577 bytes).

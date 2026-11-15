@@ -15,6 +15,7 @@ holds the services and web UI around it, and the hardware.
 | [`docs/event-sync.md`](docs/event-sync.md) | Downloading the club's events (Events page), the event pack format, transponders to learn |
 | [`docs/build.md`](docs/build.md) | Building the image, CI → GHCR (native arm64), releases |
 | [`hardware/burst-detector-hat/`](hardware/burst-detector-hat) | Burst-detector HAT for the Pi (KiCad, fab files) |
+| [`hardware/lapcounter-hat/`](hardware/lapcounter-hat) | Rev 1.1 all-in-one HAT: baluns, track/pad relay, amp, detector, ID EEPROM |
 
 ## Where things live
 

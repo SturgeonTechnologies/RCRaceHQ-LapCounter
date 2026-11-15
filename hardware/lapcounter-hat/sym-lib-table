@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "lapcounter_hat")(type "KiCad")(uri "${KIPRJMOD}/lapcounter_hat.kicad_sym")(options "")(descr "Lap counter HAT ICs"))
+)

@@ -14,6 +14,13 @@ Status: draft for review. Nothing here is built yet.
 - **1 year of updates.** The owner keeps the version they have forever and
   gets every -pro release published within 12 months of activation
   (`updatesUntil`). See *Updates window* below.
+- **Price: $500** for board + license, including the first year of
+  updates. After that, **security fixes stay free** (Admin extends
+  `updatesUntil` for that release); no paid renewal planned.
+- **Board shape: piggyback HAT with a relay** (track loop / learning pad
+  on one SDR), as all-in-one as practical. See *RF front end (rev 1.1)*.
+- **SDR: RTL-SDR Blog v3** (direct sampling) is the supported SDR for the
+  bundle. Riley's `.197` rig already runs one.
 - **v1 boards (no EEPROM) activate on the Pi serial.** Admin-only, for our
   existing boards (Riley's, NCT's). See *Legacy v1 activation* below.
 
@@ -59,8 +66,9 @@ Two IDs, both read at activation:
 
 ### HAT change required (rev 1.1)
 
-**The current schematic has no ID EEPROM.** Rev 1.1 adds the standard
-Raspberry Pi HAT ID circuit:
+The v1 schematic (breadboard gist) already includes the ID EEPROM; the
+v0 KiCad board in the public HAT repo does not. Rev 1.1 lays out the
+standard Raspberry Pi HAT ID circuit:
 
 - U? `CAT24C32` (or `24AA32A`) 32 kbit I2C EEPROM, SOIC-8 (JLC basic part
   if available).
@@ -87,6 +95,56 @@ Per board, on a jig Pi with WP jumpered low:
 
 DIY boards either have no EEPROM or one whose serial isn't in our table,
 so activation refuses them.
+
+## RF front end (rev 1.1)
+
+Goal: as close to all-in-one as practical. Pi + our board + loop wire.
+
+```
+ TRACK LOOP (390 Ω at far end) ─ twisted pair ─► TB1 ┐            (or SMA J1)
+                                                     ├─ 1:9 balun ┐
+ LEARNING PAD (390 Ω)          ─ twisted pair ─► TB2 ┘            │ (or SMA J5)
+                                                  K1 relay (GPIO22) picks one
+                                                       │
+                              clamp ► 3–8 MHz BPF ► LMH6624 (gain: bypass/low/high)
+                                                       │
+                                     ┌─────────────────┼────────────────┐
+                                     ▼                 ▼                ▼
+                               on-board SDR       J2 "ext SDR"     AD8307 detector
+                          (RTL2832U, direct-       (SMA, v3/v4      → ADS1115 (loop
+                           sampling, no tuner)      dongle)          health / RSSI)
+                                     │  solder jumper selects one
+                                     └── USB jumper ► Pi USB port
+```
+
+- **Inputs:** each input has a 2-screw terminal *and* an SMA jack. A 1:9
+  HF transformer (OpenStint's recommended balun ratio) behind each, so
+  loop wire lands on the board directly. Clubs with an existing
+  balun + coax keep using the SMA jack. The 390 Ω loop termination stays
+  at the far end of the loop, so it ships in the kit, not on the board.
+- **Relay K1 (GPIO22):** race mode = track loop, learn mode = pad. One SDR
+  can't time and learn at once (a parked car on the pad would collide with
+  finish-line passes), so the app locks learning while a heat is running.
+- **Gain is switchable** (jumper or GPIO): *bypass* for an RTL-SDR v4
+  (OpenStint: v4 needs no amp, and too much gain overloads it), *low/high*
+  for the v3 or the on-board SDR, which use direct sampling and need gain.
+- **SDR:** the bundle standardises on the **v3 design**. Rev 1.1 puts a
+  v3-style direct-sampling RTL2832U on the board (no tuner chip) with a
+  solder jumper to fall back to an external dongle on J2 if the first spin
+  doesn't work. If the on-board SDR is dropped, the kit ships a genuine
+  RTL-SDR Blog v3 + SMA M–M cable instead (not a generic clone).
+- **Supply risk:** RTL-SDR Blog v3 is still sold but v4 is the current
+  model; the on-board SDR removes that dependency, and gain bypass keeps
+  v4 dongles working.
+- **Unpopulated on trial boards:** DS3231 RTC, DC jack/PoE section.
+
+**Kit contents (trial):** board, 2× 390 Ω loop terminators, SMA M–M cable
+(only if external SDR), quick-start card with license key.
+
+**Validate before layout:** on `.197` (v3 + bare loop wire today) fit a
+1:9 balun + 390 Ω termination + RG316 and compare pass rate. That tells us
+how much of the earlier weak-RF trouble was the missing balun/termination
+and how much gain the v3 actually wants.
 
 ## Activation
 
@@ -186,7 +244,8 @@ in the same PR.
 
 ## Build order
 
-1. HAT rev 1.1 (EEPROM) + factory programming script, which also creates
+1. HAT rev 1.1 (EEPROM, baluns + terminals, relay, switchable gain,
+   on-board v3-style SDR with external fallback) + factory programming script, which also creates
    the board's bundled license key. *(Me + Riley for the order.)*
 2. RCRaceHQ: boards/licenses tables, KMS key, activate endpoint, Admin pages.
 3. Public app: the optional-blueprint hook (small, no license logic).
@@ -198,6 +257,5 @@ in the same PR.
 
 ## Open questions for Riley
 
-1. **Price** of the board + license bundle.
-2. **Update renewals** after the first year: free extensions only for
-   security fixes (current plan), or a paid renewal later?
+1. ~~Price~~ $500 bundle, first year included (decided 2026-11-14).
+2. ~~Update renewals~~ security fixes free, no paid renewal (decided 2026-11-14).
